@@ -1,6 +1,8 @@
 # BiliMusic KMP
 
-使用 Kotlin Multiplatform开发的，以 BiliBili、网易云音乐 为音频源的音乐播放器。支持Android、Windows。
+使用 Kotlin Multiplatform 开发的，以 BiliBili、网易云音乐 为音频源的音乐播放器。支持Android、Windows。
+
+![screenshot](doc/screenshot.png)
 
 ## 依赖
 
