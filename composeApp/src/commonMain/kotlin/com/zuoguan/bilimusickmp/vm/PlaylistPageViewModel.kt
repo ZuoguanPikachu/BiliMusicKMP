@@ -10,6 +10,7 @@ import com.zuoguan.bilimusickmp.services.BiliService
 import com.zuoguan.bilimusickmp.services.NeteaseService
 import com.zuoguan.bilimusickmp.services.SongRepositoryService
 import com.zuoguan.bilimusickmp.utils.UiEvent
+import kotbase.Ordering
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -207,6 +208,12 @@ class PlaylistPageViewModel(
         }
     }
 
+    fun switchOrderingMode(){
+        _uiState.update {
+            it.copy(isOrdering = !_uiState.value.isOrdering)
+        }
+    }
+
     fun toggleTag(tag: String) {
         _uiState.update { state ->
             val newSet = state.selectedTags.toMutableSet().apply {
@@ -286,6 +293,8 @@ data class PlaylistUiState(
     val allTags: List<String> = emptyList(),
     val selectedTags: Set<String> = emptySet(),
     val filterMode: TagFilterMode = TagFilterMode.OR,
+
+    val isOrdering: Boolean = false,
 
     val showDeleteDialog: Boolean = false,
     val showEditDialog: Boolean = false,

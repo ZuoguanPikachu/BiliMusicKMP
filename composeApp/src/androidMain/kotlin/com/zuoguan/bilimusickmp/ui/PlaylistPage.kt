@@ -7,10 +7,13 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.rounded.DragHandle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -31,6 +34,7 @@ import com.zuoguan.bilimusickmp.utils.UiEvent
 import com.zuoguan.bilimusickmp.utils.convertImageUrl
 import com.zuoguan.bilimusickmp.vm.PlaylistPageViewModel
 import com.zuoguan.bilimusickmp.vm.TagFilterMode
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -68,7 +72,9 @@ fun PlaylistPage(
     )
 
     Column {
-        ExpandableMultiTagSelector(
+        ToolBar(
+            state.isOrdering,
+            viewModel::switchOrderingMode,
             state.filterMode,
             viewModel::switchFilterMode,
             state.allTags,
@@ -86,18 +92,26 @@ fun PlaylistPage(
             items(state.filteredSongs, key = { it.id }) {
                 ReorderableItem(reorderState, key = it.id) {_ ->
                     SongItem(
-                        modifier = Modifier.draggableHandle(
-                            onDragStarted = {
-                                viewModel.onDragStart()
-                                hapticFeedback.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate)
-                            },
-                            onDragStopped = {
-                                viewModel.onDragEnd()
-                                hapticFeedback.performHapticFeedback(HapticFeedbackType.GestureEnd)
-                            },
-                        ),
                         song = it,
                         isPlaying = (it.id == state.currentTrack?.id && state.currentTrack?.playSource == PlaySource.PLAYLIST),
+                        state.isOrdering,
+                        orderHandle = {
+                            IconButton(
+                                onClick = {},
+                                modifier = Modifier.draggableHandle(
+                                    onDragStarted = {
+                                        viewModel.onDragStart()
+                                        hapticFeedback.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate)
+                                    },
+                                    onDragStopped = {
+                                        viewModel.onDragEnd()
+                                        hapticFeedback.performHapticFeedback(HapticFeedbackType.GestureEnd)
+                                    }
+                                )
+                            ) {
+                                Icon(Icons.Rounded.DragHandle, contentDescription = "Reorder")
+                            }
+                        },
                         playSong = viewModel::playSong,
                         requestBottomSheet = viewModel::requestBottomSheet
                     )
@@ -176,14 +190,15 @@ fun PlaylistPage(
 
 @Composable
 fun SongItem(
-    modifier: Modifier = Modifier,
     song: Song,
     isPlaying: Boolean,
+    isOrdering: Boolean,
+    orderHandle: @Composable () -> Unit,
     playSong: (Song) -> Unit,
     requestBottomSheet: (Song) -> Unit,
 ) {
     Card(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
             .background(if (isPlaying) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface)
             .combinedClickable(
@@ -239,13 +254,19 @@ fun SongItem(
                     overflow = TextOverflow.Ellipsis
                 )
             }
+
+            if (isOrdering) {
+                orderHandle()
+            }
         }
     }
 }
 
 
 @Composable
-fun ExpandableMultiTagSelector(
+fun ToolBar(
+    isOrdering: Boolean,
+    switchOrderingMode: () -> Unit,
     mode: TagFilterMode,
     onModeChange: (TagFilterMode) -> Unit,
     tags: List<String>,
@@ -265,29 +286,63 @@ fun ExpandableMultiTagSelector(
                 .fillMaxWidth()
                 .height(IntrinsicSize.Min),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = if (expanded) Arrangement.SpaceBetween else Arrangement.End
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
             if (expanded) {
                 TagFilterModeChips(mode, onModeChange)
             }
-            TextButton(
-                onClick = { expanded = !expanded },
-            ) {
-                if (expanded){
-                    Text("收起")
-                    Icon(
-                        imageVector = Icons.Default.ArrowDropUp,
-                        contentDescription = "收起"
-                    )
-                }
-                else{
+
+            AnimatedVisibility(
+                visible = !expanded,
+                enter = slideInHorizontally(initialOffsetX = { it }) + fadeIn(),
+                exit = slideOutHorizontally(targetOffsetX = { it }) + fadeOut()
+            ){
+                TextButton(
+                    onClick = { expanded = !expanded },
+                ){
                     Text("筛选歌曲")
                     Icon(
                         imageVector = Icons.Default.FilterList,
                         contentDescription = "筛选歌曲"
                     )
                 }
+            }
 
+            AnimatedVisibility(
+                visible = expanded,
+                enter = slideInHorizontally() + fadeIn(),
+                exit = slideOutHorizontally() + fadeOut()
+            ){
+                TextButton(
+                    onClick = { expanded = !expanded },
+                ){
+                    Text("收起")
+                    Icon(
+                        imageVector = Icons.Default.ArrowDropUp,
+                        contentDescription = "收起"
+                    )
+                }
+            }
+
+            if (!expanded){
+                AssistChip(
+                    onClick = { switchOrderingMode() },
+                    label = {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Sort,
+                            contentDescription = "排序"
+                        )
+                        Text("排序")
+                    },
+                    colors = AssistChipDefaults.assistChipColors(
+                        containerColor =
+                            if (isOrdering)
+                                MaterialTheme.colorScheme.primaryContainer
+                            else
+                                MaterialTheme.colorScheme.surface,
+                        labelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                )
             }
         }
 
