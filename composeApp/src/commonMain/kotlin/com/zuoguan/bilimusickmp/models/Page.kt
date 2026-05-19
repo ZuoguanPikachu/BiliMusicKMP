@@ -4,5 +4,6 @@ enum class Page {
     PLAYLIST,
     SEARCH,
     SETTINGS,
-    LYRICS
+    LYRICS,
+    SONG_EDIT
 }

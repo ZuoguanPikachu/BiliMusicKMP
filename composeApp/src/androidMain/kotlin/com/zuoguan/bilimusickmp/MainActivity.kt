@@ -56,13 +56,17 @@ import androidx.core.content.ContextCompat
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.zuoguan.bilimusickmp.di.appModule
+import com.zuoguan.bilimusickmp.models.Song
 import com.zuoguan.bilimusickmp.services.MusicPlaybackService
+import com.zuoguan.bilimusickmp.services.NavigationService
 import com.zuoguan.bilimusickmp.ui.LyricsPage
 import com.zuoguan.bilimusickmp.ui.PlayBar
 import com.zuoguan.bilimusickmp.ui.PlaylistPage
 import com.zuoguan.bilimusickmp.ui.SearchPage
 import com.zuoguan.bilimusickmp.ui.SettingsPage
+import com.zuoguan.bilimusickmp.ui.SongEditPage
 import org.koin.android.ext.koin.androidContext
+import org.koin.compose.koinInject
 import org.koin.core.context.startKoin
 
 
@@ -94,17 +98,18 @@ class MainActivity : ComponentActivity() {
 
 
 @Composable
-fun App() {
+fun App(
+    navigationService: NavigationService = koinInject()
+) {
     val snackBarHostState = remember { SnackbarHostState() }
-    var currentPage by rememberSaveable { mutableStateOf(Page.PLAYLIST) }
-    var previousPage by rememberSaveable { mutableStateOf<Page?>(null) }
+    val currentPage = navigationService.currentPage
 
     CompositionLocalProvider(LocalSnackBarHostState provides snackBarHostState) {
         Scaffold(
             snackbarHost = { SnackbarHost(snackBarHostState) },
             bottomBar = {
                 AnimatedVisibility(
-                    visible = currentPage != Page.LYRICS,
+                    visible = currentPage != Page.LYRICS && currentPage != Page.SONG_EDIT,
                     enter = slideInVertically(
                         initialOffsetY = { it },
                     ),
@@ -114,21 +119,18 @@ fun App() {
                 ) {
                     BottomNavigationBar(
                         selected = currentPage,
-                        onSelect = { currentPage = it }
+                        onSelect = { navigationService.reset(it) }
                     )
                 }
 
             },
             floatingActionButton = {
                 AnimatedVisibility(
-                    visible = currentPage != Page.LYRICS,
+                    visible = currentPage != Page.LYRICS && currentPage != Page.SONG_EDIT,
                     enter = fadeIn() + expandIn(),
                     exit = shrinkOut() + fadeOut()
                 ) {
-                    PlayBar({
-                        previousPage = currentPage
-                        currentPage = Page.LYRICS
-                    })
+                    PlayBar()
                 }
             },
             floatingActionButtonPosition = FabPosition.Center,
@@ -142,10 +144,6 @@ fun App() {
             ) {
                 ContentArea(
                     page = currentPage,
-                    onBackFromLyrics = {
-                        currentPage = previousPage ?: Page.PLAYLIST
-                        previousPage = null
-                    },
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -189,7 +187,6 @@ fun BottomNavigationBar(
 @Composable
 fun ContentArea(
     page: Page,
-    onBackFromLyrics: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     AnimatedContent(
@@ -202,7 +199,8 @@ fun ContentArea(
                 Page.PLAYLIST to 0,
                 Page.SEARCH   to 1,
                 Page.SETTINGS to 2,
-                Page.LYRICS   to 3
+                Page.LYRICS   to 3,
+                Page.SONG_EDIT to 4,
             )
 
             val initialIndex = pageOrder[initial] ?: 0
@@ -240,7 +238,8 @@ fun ContentArea(
                 Page.PLAYLIST -> PlaylistPage()
                 Page.SEARCH   -> SearchPage()
                 Page.SETTINGS -> SettingsPage()
-                Page.LYRICS   -> LyricsPage(onBack = onBackFromLyrics)
+                Page.LYRICS   -> LyricsPage()
+                Page.SONG_EDIT -> SongEditPage(null)
             }
         }
     }

@@ -135,8 +135,9 @@ fun PlaylistPage(
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     onClick = {
-                        viewModel.requestEdit(state.songToHandle!!)
+//                        viewModel.requestEdit(state.songToHandle!!)
                         viewModel.dismissBottomSheet()
+//                        onEditSong(state.songToHandle!!)
                     }
                 ) {
                     ListItem(

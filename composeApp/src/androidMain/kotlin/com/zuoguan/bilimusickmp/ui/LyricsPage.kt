@@ -11,14 +11,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import com.zuoguan.bilimusickmp.services.NavigationService
 import org.koin.compose.koinInject
 import com.zuoguan.bilimusickmp.vm.LyricsPageViewModel
 
 
 @Composable
 fun LyricsPage(
-    onBack: () -> Unit,
-    viewModel: LyricsPageViewModel = koinInject()
+    viewModel: LyricsPageViewModel = koinInject(),
+    navigationService: NavigationService = koinInject()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val listState = rememberLazyListState()
@@ -33,11 +34,11 @@ fun LyricsPage(
         )
     }
     BackHandler(enabled = true) {
-        onBack()
+        navigationService.back()
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        IconButton(onClick = onBack) {
+        IconButton(onClick = { navigationService.back() }) {
             Icon(
                 imageVector = Icons.AutoMirrored.Default.ArrowBack,
                 contentDescription = "返回"

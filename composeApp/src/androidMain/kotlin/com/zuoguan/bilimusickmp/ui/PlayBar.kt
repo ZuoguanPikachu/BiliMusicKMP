@@ -13,19 +13,21 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.zuoguan.bilimusickmp.models.Page
 import io.kamel.core.Resource
 import io.kamel.image.asyncPainterResource
 import org.koin.compose.koinInject
 import com.zuoguan.bilimusickmp.models.PlayMode
 import com.zuoguan.bilimusickmp.models.PlaybackState
+import com.zuoguan.bilimusickmp.services.NavigationService
 import com.zuoguan.bilimusickmp.utils.convertImageUrl
 import com.zuoguan.bilimusickmp.vm.PlayBarViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlayBar(
-    onClick: () -> Unit,
-    viewModel: PlayBarViewModel = koinInject()
+    viewModel: PlayBarViewModel = koinInject(),
+    navigationService: NavigationService = koinInject()
 ) {
     val state by viewModel.uiState.collectAsState()
     val currentTrack = state.currentTrack
@@ -40,7 +42,7 @@ fun PlayBar(
                 shape = RoundedCornerShape(20.dp),
                 clip = false
             ),
-        onClick = onClick
+        onClick = { navigationService.navigate(Page.LYRICS) }
     ) {
         Row(
             modifier = Modifier

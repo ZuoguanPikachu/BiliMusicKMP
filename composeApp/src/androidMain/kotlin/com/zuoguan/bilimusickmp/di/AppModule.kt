@@ -5,6 +5,7 @@ import com.zuoguan.bilimusickmp.services.AudioPlayService
 import com.zuoguan.bilimusickmp.services.BiliService
 import com.zuoguan.bilimusickmp.services.ExoAudioPlayService
 import com.zuoguan.bilimusickmp.services.ExtractSongBaseInfoService
+import com.zuoguan.bilimusickmp.services.NavigationService
 import com.zuoguan.bilimusickmp.services.NeteaseService
 import com.zuoguan.bilimusickmp.services.PreferencesStorageService
 import com.zuoguan.bilimusickmp.services.SongRepositoryService
@@ -26,6 +27,8 @@ val appModule = module {
     single<AudioPlayService> {
         ExoAudioPlayService(androidContext())
     }
+
+    single { NavigationService() }
 
     single { PlaylistPageViewModel(get(), get(), get(), get()) }
     single { SearchPageViewModel(get(), get(), get(), get(), get()) }
