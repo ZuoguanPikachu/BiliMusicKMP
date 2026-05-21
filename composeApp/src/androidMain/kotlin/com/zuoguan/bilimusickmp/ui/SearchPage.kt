@@ -22,6 +22,7 @@ import io.kamel.image.asyncPainterResource
 import org.koin.compose.koinInject
 import com.zuoguan.bilimusickmp.LocalSnackBarHostState
 import com.zuoguan.bilimusickmp.models.AudioSource
+import com.zuoguan.bilimusickmp.models.LyricSource
 import com.zuoguan.bilimusickmp.models.Page
 import com.zuoguan.bilimusickmp.models.SearchResult
 import com.zuoguan.bilimusickmp.models.Song
@@ -60,16 +61,16 @@ fun SearchPage(
         }
     }
 
-    if (state.showAddDialog) {
-        SongInfoEditDialog(
-            "添加歌曲",
-            state.isExtractInfoLoading,
-            state.allTags,
-            state.songToAdd,
-            viewModel::confirmAdd,
-            viewModel::cancelAdd,
-        )
-    }
+//    if (state.showAddDialog) {
+//        SongInfoEditDialog(
+//            "添加歌曲",
+//            state.isExtractInfoLoading,
+//            state.allTags,
+//            state.songToAdd,
+//            viewModel::confirmAdd,
+//            viewModel::cancelAdd,
+//        )
+//    }
 
     Column(
         modifier = Modifier.fillMaxSize()
@@ -156,6 +157,13 @@ fun SearchPage(
                                     title = item.title
                                     author = item.author
                                     pic = item.pic
+                                    lyricId = if (item.audioSource != AudioSource.BILI_BILI) item.id else ""
+                                    lyricSource = when(item.audioSource){
+                                        AudioSource.BILI_BILI -> LyricSource.NONE
+                                        AudioSource.KU_GOU -> LyricSource.KU_GOU
+                                        AudioSource.NET_EASE -> LyricSource.NET_EASE
+                                    }
+                                    ts = System.currentTimeMillis()
                                 }, "Search")
                                 navigationService.navigate(Page.SONG_EDIT)
                             }

@@ -1,6 +1,7 @@
 package com.zuoguan.bilimusickmp.services
 
 import com.zuoguan.bilimusickmp.models.AudioSource
+import com.zuoguan.bilimusickmp.models.LyricSource
 import com.zuoguan.bilimusickmp.utils.DatabaseHelper
 import com.zuoguan.bilimusickmp.models.Song
 import kotbase.DataSource
@@ -43,7 +44,8 @@ class SongRepositoryService {
                 setString("pic", song.pic)
                 setArray("tags", MutableArray(song.tags))
                 setString("cid", song.cid)
-                setString("neteaseId", song.neteaseId)
+                setString("lyricSource", song.lyricSource.name)
+                setString("lyricId", song.lyricId)
                 setInt("lyricBias", song.lyricBias)
                 setLong("ts", song.ts)
             }
@@ -72,7 +74,8 @@ class SongRepositoryService {
                 SelectResult.property("pic"),
                 SelectResult.property("tags"),
                 SelectResult.property("cid"),
-                SelectResult.property("neteaseId"),
+                SelectResult.property("lyricSource"),
+                SelectResult.property("lyricId"),
                 SelectResult.property("lyricBias"),
                 SelectResult.property("ts")
             )
@@ -92,7 +95,10 @@ class SongRepositoryService {
                     ?.mapNotNull { it.toString() }
                     ?: emptyList()
                 cid = row.getString("cid") ?: ""
-                neteaseId = row.getString("neteaseId") ?: ""
+                lyricSource = row.getString("lyricSource")
+                    ?.let { runCatching { LyricSource.valueOf(it) }.getOrNull() }
+                    ?: LyricSource.NONE
+                lyricId = row.getString("lyricId") ?: ""
                 lyricBias = row.getInt("lyricBias")
                 ts = row.getLong("ts")
             }

@@ -143,7 +143,6 @@ fun PlaylistPage(
                         viewModel.dismissBottomSheet()
                         songEditService.editSong(state.songToHandle!!, "Playlist")
                         navigationService.navigate(Page.SONG_EDIT)
-//                        viewModel.requestEdit(state.songToHandle!!)
                     }
                 ) {
                     ListItem(
@@ -183,16 +182,16 @@ fun PlaylistPage(
         )
     }
 
-    if (state.showEditDialog) {
-        SongInfoEditDialog(
-            "编辑歌曲",
-            false,
-            state.allTags,
-            state.songToHandle!!,
-            viewModel::confirmEdit,
-            viewModel::cancelEdit
-        )
-    }
+//    if (state.showEditDialog) {
+//        SongInfoEditDialog(
+//            "编辑歌曲",
+//            false,
+//            state.allTags,
+//            state.songToHandle!!,
+//            viewModel::confirmEdit,
+//            viewModel::cancelEdit
+//        )
+//    }
 }
 
 @Composable

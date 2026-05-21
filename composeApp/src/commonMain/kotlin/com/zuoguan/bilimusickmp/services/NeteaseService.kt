@@ -1,6 +1,5 @@
 package com.zuoguan.bilimusickmp.services
 
-import com.zuoguan.bilimusickmp.utils.base64Encode
 import java.math.BigInteger
 import java.security.SecureRandom
 import javax.crypto.Cipher
@@ -17,6 +16,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.jsoup.Jsoup
 import java.net.URLEncoder
 import kotlin.collections.get
+import kotlin.io.encoding.Base64
 
 object WEAPIEncryptor {
     private const val PUB_EXP = "010001"
@@ -51,7 +51,7 @@ object WEAPIEncryptor {
         val iv = IvParameterSpec("0102030405060708".toByteArray())
         cipher.init(Cipher.ENCRYPT_MODE, keySpec, iv)
         val encrypted = cipher.doFinal(text.toByteArray())
-        return base64Encode(encrypted)
+        return Base64.encode(encrypted)
     }
 
     private fun rsaEncrypt(text: String): String {
@@ -152,8 +152,6 @@ class NeteaseService {
                 SearchResult(id, title, author, imageUrl, duration, AudioSource.NET_EASE)
             }
         }
-
-
     }
 
     suspend fun searchById(id: String): List<SearchResult> {
@@ -221,7 +219,7 @@ class NeteaseService {
         }
     }
 
-    suspend fun getImageUrl(id: String): String {
+    fun getImageUrl(id: String): String {
         val html = client.newCall(
             Request.Builder().url("https://music.163.com/song?id=$id").build()
         ).execute().body.string()

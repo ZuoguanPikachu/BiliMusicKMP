@@ -180,6 +180,10 @@ class ExoAudioPlayService(
                 headers["Referer"] = "https://music.163.com/"
                 headers["Origin"] = "https://music.163.com"
             }
+            AudioSource.KU_GOU -> {
+                headers["User-Agent"] = "IPhone-8990-searchSong"
+                headers["UNI-UserAgent"] = "iOS11.4-Phone8990-1009-0-WiFi"
+            }
         }
 
         val okHttpClient = OkHttpClient.Builder()

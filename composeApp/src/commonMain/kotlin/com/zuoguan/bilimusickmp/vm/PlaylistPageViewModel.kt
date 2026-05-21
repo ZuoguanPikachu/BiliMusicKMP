@@ -2,11 +2,13 @@ package com.zuoguan.bilimusickmp.vm
 
 import androidx.compose.material3.SnackbarDuration
 import com.zuoguan.bilimusickmp.models.AudioSource
+import com.zuoguan.bilimusickmp.models.LyricSource
 import com.zuoguan.bilimusickmp.models.PlaySource
 import com.zuoguan.bilimusickmp.models.Song
 import com.zuoguan.bilimusickmp.models.TrackInfo
 import com.zuoguan.bilimusickmp.services.AudioPlayService
 import com.zuoguan.bilimusickmp.services.BiliService
+import com.zuoguan.bilimusickmp.services.KuGouService
 import com.zuoguan.bilimusickmp.services.NeteaseService
 import com.zuoguan.bilimusickmp.services.SongRepositoryService
 import com.zuoguan.bilimusickmp.utils.UiEvent
@@ -27,7 +29,8 @@ class PlaylistPageViewModel(
     private val songRepository: SongRepositoryService,
     private val audioPlayService: AudioPlayService,
     private val biliService: BiliService,
-    private val neteaseService: NeteaseService
+    private val neteaseService: NeteaseService,
+    private val kuGouService: KuGouService
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -142,16 +145,20 @@ class PlaylistPageViewModel(
                             }
 
                             AudioSource.NET_EASE -> {
-                                neteaseService.getAudioUrl(song.neteaseId)
+                                neteaseService.getAudioUrl(song.id)
+                            }
+
+                            AudioSource.KU_GOU -> {
+                                kuGouService.getAudioUrl(song.id)
                             }
                         }
                     },
                     lyricBias = song.lyricBias,
                     lyricsProvider = {
-                        if (song.neteaseId.isEmpty()) {
-                            emptyList()
-                        } else {
-                            neteaseService.getLyric(song.neteaseId)
+                        when(song.lyricSource){
+                            LyricSource.KU_GOU -> kuGouService.getLyric(song.lyricId)
+                            LyricSource.NET_EASE -> neteaseService.getLyric(song.lyricId)
+                            LyricSource.NONE -> emptyList()
                         }
                     }
                 )
@@ -174,16 +181,20 @@ class PlaylistPageViewModel(
                     }
 
                     AudioSource.NET_EASE -> {
-                        neteaseService.getAudioUrl(song.neteaseId)
+                        neteaseService.getAudioUrl(song.id)
+                    }
+
+                    AudioSource.KU_GOU -> {
+                        kuGouService.getAudioUrl(song.id)
                     }
                 }
             },
             lyricBias = song.lyricBias,
             lyricsProvider = {
-                if (song.neteaseId.isEmpty()) {
-                    emptyList()
-                } else {
-                    neteaseService.getLyric(song.neteaseId)
+                when(song.lyricSource){
+                    LyricSource.KU_GOU -> kuGouService.getLyric(song.lyricId)
+                    LyricSource.NET_EASE -> neteaseService.getLyric(song.lyricId)
+                    LyricSource.NONE -> emptyList()
                 }
             }
         )

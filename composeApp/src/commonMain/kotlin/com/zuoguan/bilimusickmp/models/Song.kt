@@ -9,7 +9,9 @@ class Song {
     var pic: String = ""
     var tags: List<String> = emptyList()
     var cid: String = ""
-    var neteaseId: String = ""
+
+    var lyricSource: LyricSource = LyricSource.NONE
+    var lyricId: String = ""
     var lyricBias: Int = 0
     var ts: Long = 0
 }

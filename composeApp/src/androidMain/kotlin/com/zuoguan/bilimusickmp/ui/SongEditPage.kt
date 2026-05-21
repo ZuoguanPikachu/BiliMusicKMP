@@ -4,13 +4,9 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -22,14 +18,12 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,10 +31,8 @@ import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import com.zuoguan.bilimusickmp.models.Song
 import com.zuoguan.bilimusickmp.services.NavigationService
 import com.zuoguan.bilimusickmp.vm.SongEditPageViewModel
-import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
 @Composable
@@ -76,7 +68,8 @@ fun SongEditPage(
 
         var title by remember(song){ mutableStateOf(song.title) }
         var author by remember(song) { mutableStateOf(song.author) }
-        var neteaseId by remember(song) { mutableStateOf(song.neteaseId) }
+        var lyricSource by remember(song) { mutableStateOf(song.lyricSource) }
+        var lyricId by remember(song) { mutableStateOf(song.lyricId) }
         var lyricBiasText by remember(song) { mutableStateOf(song.lyricBias.toString()) }
         var pic by remember(song) { mutableStateOf(song.pic) }
         var tags by remember(song) { mutableStateOf(song.tags) }
@@ -105,10 +98,14 @@ fun SongEditPage(
                 modifier = Modifier.fillMaxWidth()
             )
 
+            SearchSourceDropdown(lyricSource, {
+                lyricSource = it
+            })
+
             TextField(
-                value = neteaseId,
-                onValueChange = { neteaseId = it },
-                label = { Text("网易云Id") },
+                value = lyricId,
+                onValueChange = { lyricId = it },
+                label = { Text("歌词ID") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 trailingIcon = {
@@ -173,12 +170,14 @@ fun SongEditPage(
                 onClick = {
                     viewModel.save(
                         song.apply {
-                            this.title=title
-                            this.author=author
-                            this.neteaseId=neteaseId
+                            this.title = title
+                            this.author = author
+                            this.lyricSource = lyricSource
+                            this.lyricId = lyricId
                             lyricBias = lyricBiasText.toIntOrNull() ?: 0
                             this.pic = pic
                             this.tags = tags.ifEmpty { listOf("Default") }
+                            this.ts = song.ts
                         }
                     )
                     navigationService.back()
@@ -188,6 +187,4 @@ fun SongEditPage(
             }
         }
     }
-
-
 }

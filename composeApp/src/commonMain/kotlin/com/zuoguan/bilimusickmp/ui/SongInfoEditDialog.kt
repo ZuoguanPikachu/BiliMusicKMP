@@ -40,7 +40,7 @@ fun SongInfoEditDialog(
 ) {
     var title by remember(song) { mutableStateOf(song?.title.orEmpty()) }
     var author by remember(song) { mutableStateOf(song?.author.orEmpty()) }
-    var neteaseId by remember(song) { mutableStateOf(song?.neteaseId.orEmpty()) }
+    var neteaseId by remember(song) { mutableStateOf(song?.lyricId.orEmpty()) }
     var lyricBiasText by remember(song) { mutableStateOf(song?.lyricBias?.toString().orEmpty()) }
     var pic by remember(song) { mutableStateOf(song?.pic.orEmpty()) }
     var tags by remember(song) { mutableStateOf(song?.tags.orEmpty()) }
@@ -183,7 +183,7 @@ fun SongInfoEditDialog(
                                 onConfirm(it.apply {
                                     this.title = title
                                     this.author = author
-                                    this.neteaseId = neteaseId
+                                    this.lyricId = neteaseId
                                     lyricBias = lyricBiasText.toIntOrNull() ?: 0
                                     this.pic = pic
                                     this.tags = tags.ifEmpty { listOf("Default") }

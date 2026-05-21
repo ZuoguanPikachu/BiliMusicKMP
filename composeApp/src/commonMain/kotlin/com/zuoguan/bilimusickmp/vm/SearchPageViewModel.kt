@@ -2,6 +2,7 @@ package com.zuoguan.bilimusickmp.vm
 
 import androidx.compose.material3.SnackbarDuration
 import com.zuoguan.bilimusickmp.models.AudioSource
+import com.zuoguan.bilimusickmp.models.LyricSource
 import com.zuoguan.bilimusickmp.models.PlaySource
 import com.zuoguan.bilimusickmp.models.SearchResult
 import com.zuoguan.bilimusickmp.models.Song
@@ -9,9 +10,11 @@ import com.zuoguan.bilimusickmp.models.TrackInfo
 import com.zuoguan.bilimusickmp.services.AudioPlayService
 import com.zuoguan.bilimusickmp.services.BiliService
 import com.zuoguan.bilimusickmp.services.ExtractSongBaseInfoService
+import com.zuoguan.bilimusickmp.services.KuGouService
 import com.zuoguan.bilimusickmp.services.NeteaseService
 import com.zuoguan.bilimusickmp.services.SongRepositoryService
 import com.zuoguan.bilimusickmp.utils.UiEvent
+import com.zuoguan.bilimusickmp.utils.enrichSongInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -28,7 +31,8 @@ class SearchPageViewModel(
     private val neteaseService: NeteaseService,
     private val audioPlayService: AudioPlayService,
     private val extractSongBaseInfoService: ExtractSongBaseInfoService,
-    private val songRepository: SongRepositoryService
+    private val songRepository: SongRepositoryService,
+    private val kuGouService: KuGouService
 ) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -79,6 +83,10 @@ class SearchPageViewModel(
                     AudioSource.NET_EASE ->
                         neteaseService.search(keyword)
                             .map { it.copy(audioSource = AudioSource.NET_EASE) }
+
+                    AudioSource.KU_GOU -> {
+                        kuGouService.search(keyword)
+                    }
                 }
 
                 _uiState.update {
@@ -116,6 +124,10 @@ class SearchPageViewModel(
                     AudioSource.NET_EASE -> {
                         neteaseService.getAudioUrl(item.id)
                     }
+
+                    AudioSource.KU_GOU -> {
+                        kuGouService.getAudioUrl(item.id)
+                    }
                 }
             },
             lyricsProvider = {
@@ -124,6 +136,10 @@ class SearchPageViewModel(
 
                     AudioSource.NET_EASE -> {
                         neteaseService.getLyric(item.id)
+                    }
+
+                    AudioSource.KU_GOU -> {
+                        kuGouService.getLyric(item.id)
                     }
                 }
             },
@@ -154,36 +170,19 @@ class SearchPageViewModel(
             try {
                 var song: Song
                 if (item.audioSource == AudioSource.BILI_BILI) {
-                    val songDeferred = async {
-                        val songBaseInfo = extractSongBaseInfoService.extractInfo(item.title)
-                        val title = songBaseInfo.title.ifEmpty { item.title }
-                        val author = songBaseInfo.author
-
-                        var neteaseId = ""
-                        var pic = item.pic
-                        if (songBaseInfo.title.isNotEmpty() && songBaseInfo.author.isNotEmpty()) {
-                            neteaseId = neteaseService.getIdByTitleAndAuthor(title, author)
-                            if (neteaseId.isNotEmpty()){
-                                pic = neteaseService.getImageUrl(neteaseId)
-                            }
-                        }
-
+                    song = enrichSongInfo(
+                        extractSongBaseInfoService,
+                        biliService,
+                        kuGouService,
                         Song().apply {
                             id = item.id
                             audioSource = item.audioSource
-                            this.title = title
-                            this.author = author
-                            this.pic = pic
-                            this.neteaseId = neteaseId
+                            title = item.title
+                            author = item.author
+                            pic = item.pic
                             ts = System.currentTimeMillis()
                         }
-                    }
-
-                    val cidDeferred = async {
-                        biliService.getCid(item.id)
-                    }
-
-                    song = songDeferred.await().apply{ cid = cidDeferred.await() }
+                    )
                 }
                 else
                 {
@@ -193,7 +192,8 @@ class SearchPageViewModel(
                         title = item.title
                         author = item.author
                         pic = item.pic
-                        neteaseId = item.id
+                        lyricSource = if (item.audioSource == AudioSource.KU_GOU) LyricSource.KU_GOU  else LyricSource.NET_EASE
+                        lyricId = item.id
                         ts = System.currentTimeMillis()
                     }
                 }
