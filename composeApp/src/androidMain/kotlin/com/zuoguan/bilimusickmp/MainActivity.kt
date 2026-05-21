@@ -239,7 +239,7 @@ fun ContentArea(
                 Page.SEARCH   -> SearchPage()
                 Page.SETTINGS -> SettingsPage()
                 Page.LYRICS   -> LyricsPage()
-                Page.SONG_EDIT -> SongEditPage(null)
+                Page.SONG_EDIT -> SongEditPage()
             }
         }
     }

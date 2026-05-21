@@ -28,8 +28,11 @@ import org.koin.compose.koinInject
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 import com.zuoguan.bilimusickmp.LocalSnackBarHostState
+import com.zuoguan.bilimusickmp.models.Page
 import com.zuoguan.bilimusickmp.models.PlaySource
 import com.zuoguan.bilimusickmp.models.Song
+import com.zuoguan.bilimusickmp.services.NavigationService
+import com.zuoguan.bilimusickmp.services.SongEditService
 import com.zuoguan.bilimusickmp.utils.UiEvent
 import com.zuoguan.bilimusickmp.utils.convertImageUrl
 import com.zuoguan.bilimusickmp.vm.PlaylistPageViewModel
@@ -39,7 +42,9 @@ import com.zuoguan.bilimusickmp.vm.TagFilterMode
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlaylistPage(
-    viewModel: PlaylistPageViewModel = koinInject()
+    viewModel: PlaylistPageViewModel = koinInject(),
+    navigationService: NavigationService = koinInject(),
+    songEditService: SongEditService = koinInject()
 ) {
     val state by viewModel.uiState.collectAsState()
     val coroutineScope = rememberCoroutineScope()
@@ -135,9 +140,10 @@ fun PlaylistPage(
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     onClick = {
-//                        viewModel.requestEdit(state.songToHandle!!)
                         viewModel.dismissBottomSheet()
-//                        onEditSong(state.songToHandle!!)
+                        songEditService.editSong(state.songToHandle!!, "Playlist")
+                        navigationService.navigate(Page.SONG_EDIT)
+//                        viewModel.requestEdit(state.songToHandle!!)
                     }
                 ) {
                     ListItem(

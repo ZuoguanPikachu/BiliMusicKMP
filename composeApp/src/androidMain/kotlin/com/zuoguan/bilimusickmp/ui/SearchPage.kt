@@ -22,8 +22,12 @@ import io.kamel.image.asyncPainterResource
 import org.koin.compose.koinInject
 import com.zuoguan.bilimusickmp.LocalSnackBarHostState
 import com.zuoguan.bilimusickmp.models.AudioSource
+import com.zuoguan.bilimusickmp.models.Page
 import com.zuoguan.bilimusickmp.models.SearchResult
+import com.zuoguan.bilimusickmp.models.Song
 import com.zuoguan.bilimusickmp.models.label
+import com.zuoguan.bilimusickmp.services.NavigationService
+import com.zuoguan.bilimusickmp.services.SongEditService
 import com.zuoguan.bilimusickmp.utils.UiEvent
 import com.zuoguan.bilimusickmp.utils.convertImageUrl
 import com.zuoguan.bilimusickmp.vm.SearchPageViewModel
@@ -31,7 +35,9 @@ import com.zuoguan.bilimusickmp.vm.SearchPageViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchPage(
-    viewModel: SearchPageViewModel = koinInject()
+    viewModel: SearchPageViewModel = koinInject(),
+    navigationService: NavigationService = koinInject(),
+    songEditService: SongEditService = koinInject()
 ) {
     val state by viewModel.uiState.collectAsState()
     val coroutineScope = rememberCoroutineScope()
@@ -143,7 +149,16 @@ fun SearchPage(
                         SearchResultItem(
                             item,
                             onItemClick = viewModel::playSong,
-                            onAddButtonClick = viewModel::requestAdd
+                            onAddButtonClick = {
+                                songEditService.editSong(Song().apply {
+                                    id = item.id
+                                    audioSource = item.audioSource
+                                    title = item.title
+                                    author = item.author
+                                    pic = item.pic
+                                }, "Search")
+                                navigationService.navigate(Page.SONG_EDIT)
+                            }
                         )
                     }
                 }
@@ -188,7 +203,9 @@ fun SearchResultItem(
                         )
                     }
                     is Resource.Failure -> {
-                        Box(modifier = Modifier.fillMaxSize().background(Color.Gray)) {
+                        Box(modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Gray)) {
                             Text("加载失败", modifier = Modifier.align(Alignment.Center))
                         }
                     }

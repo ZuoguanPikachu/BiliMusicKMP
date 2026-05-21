@@ -52,7 +52,6 @@ fun SongInfoEditDialog(
     suspend fun autoFill() {
         if(title.isNotEmpty() && title.isNotEmpty() && neteaseId.isEmpty()){
             neteaseId = neteaseService.getIdByTitleAndAuthor(title, author)
-            println()
         }
 
         if (neteaseId.isNotEmpty() && pic.isEmpty()) {
@@ -196,119 +195,6 @@ fun SongInfoEditDialog(
                         Text("确定")
                     }
                 }
-            }
-        }
-    }
-}
-
-@Composable
-fun TagsEditor(
-    tags: List<String>,
-    allTags: List<String>,
-    newTagText: String,
-    onNewTagTextChange: (String) -> Unit,
-    onAddTag: (String) -> Unit,
-    onRemoveTag: (String) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val suggestions = remember(newTagText, tags, allTags) {
-        if (newTagText.isBlank()) {
-            emptyList()
-        } else {
-            allTags
-                .filter { it.contains(newTagText, ignoreCase = true) }
-                .filterNot { it in tags }
-                .take(3)
-        }
-    }
-
-    Column(modifier) {
-        var textFieldWidthPx by remember { mutableIntStateOf(0) }
-        val density = LocalDensity.current
-
-        TextField(
-            value = newTagText,
-            onValueChange = onNewTagTextChange,
-            label = { Text("添加标签") },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(
-                onDone = {
-                    val text = newTagText.trim()
-                    if (text.isNotBlank()) {
-                        onAddTag(text)
-                    }
-                }
-            ),
-            modifier = Modifier
-                .fillMaxWidth()
-                .onGloballyPositioned { coordinates ->
-                    textFieldWidthPx = coordinates.size.width
-                },
-            trailingIcon = {
-                val text = newTagText.trim()
-                if (text.isNotBlank()) {
-                    IconButton(
-                        modifier = Modifier.pointerHoverIcon(PointerIcon.Default),
-                        onClick = { onAddTag(text) }
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = "添加")
-                    }
-                }
-            }
-        )
-
-        if (suggestions.isNotEmpty()) {
-            Popup(
-                alignment = Alignment.TopStart,
-                offset = IntOffset(0, 60)
-            ) {
-                Card(
-                    modifier = Modifier.width(
-                        with(density) { textFieldWidthPx.toDp() }
-                    )
-                ) {
-                    Column {
-                        suggestions.forEach { tag ->
-                            ListItem(
-                                headlineContent = { Text(tag) },
-                                modifier = Modifier.clickable {
-                                    onAddTag(tag)
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        Spacer(Modifier.height(8.dp))
-
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            if (tags.isEmpty()) {
-                AssistChip(
-                    onClick = {},
-                    label = { Text("Default") }
-                )
-            }
-
-            tags.forEach { tag ->
-                AssistChip(
-                    onClick = {},
-                    label = { Text(tag) },
-                    trailingIcon = {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Remove tag",
-                            modifier = Modifier
-                                .size(16.dp)
-                                .clickable { onRemoveTag(tag) }
-                        )
-                    }
-                )
             }
         }
     }

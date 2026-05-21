@@ -8,12 +8,14 @@ import com.zuoguan.bilimusickmp.services.ExtractSongBaseInfoService
 import com.zuoguan.bilimusickmp.services.NavigationService
 import com.zuoguan.bilimusickmp.services.NeteaseService
 import com.zuoguan.bilimusickmp.services.PreferencesStorageService
+import com.zuoguan.bilimusickmp.services.SongEditService
 import com.zuoguan.bilimusickmp.services.SongRepositoryService
 import com.zuoguan.bilimusickmp.vm.LyricsPageViewModel
 import com.zuoguan.bilimusickmp.vm.PlayBarViewModel
 import com.zuoguan.bilimusickmp.vm.PlaylistPageViewModel
 import com.zuoguan.bilimusickmp.vm.SearchPageViewModel
 import com.zuoguan.bilimusickmp.vm.SettingsPageViewModel
+import com.zuoguan.bilimusickmp.vm.SongEditPageViewModel
 import org.koin.android.ext.koin.androidContext
 import org.koin.dsl.module
 
@@ -29,7 +31,9 @@ val appModule = module {
     }
 
     single { NavigationService() }
+    single { SongEditService() }
 
+    single { SongEditPageViewModel(get(), get(), get(), get(), get()) }
     single { PlaylistPageViewModel(get(), get(), get(), get()) }
     single { SearchPageViewModel(get(), get(), get(), get(), get()) }
     single { SettingsPageViewModel(get()) }
