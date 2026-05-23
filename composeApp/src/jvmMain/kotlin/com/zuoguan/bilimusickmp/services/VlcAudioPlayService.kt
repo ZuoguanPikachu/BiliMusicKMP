@@ -120,6 +120,11 @@ class VlcAudioPlayService : AudioPlayService {
                 ":http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
             )
 
+            AudioSource.KU_GOU -> arrayOf(
+                ":http-uni-useragent=iOS11.4-Phone8990-1009-0-WiFi",
+                ":http-user-agent=IPhone-8990-searchSong"
+            )
+
             AudioSource.NET_EASE -> arrayOf(
                 ":http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
             )

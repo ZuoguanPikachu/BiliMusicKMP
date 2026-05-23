@@ -31,8 +31,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.zuoguan.bilimusickmp.models.Page
@@ -48,15 +46,12 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.zuoguan.bilimusickmp.di.appModule
-import com.zuoguan.bilimusickmp.models.Song
 import com.zuoguan.bilimusickmp.services.MusicPlaybackService
 import com.zuoguan.bilimusickmp.services.NavigationService
 import com.zuoguan.bilimusickmp.ui.LyricsPage
@@ -134,9 +129,7 @@ fun App(
                 }
             },
             floatingActionButtonPosition = FabPosition.Center,
-
-            ) { innerPadding ->
-
+        ) { innerPadding ->
             Row(
                 modifier = Modifier
                     .fillMaxSize()

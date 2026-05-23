@@ -9,16 +9,14 @@ import com.zuoguan.bilimusickmp.models.Song
 import com.zuoguan.bilimusickmp.models.TrackInfo
 import com.zuoguan.bilimusickmp.services.AudioPlayService
 import com.zuoguan.bilimusickmp.services.BiliService
-import com.zuoguan.bilimusickmp.services.ExtractSongBaseInfoService
 import com.zuoguan.bilimusickmp.services.KuGouService
-import com.zuoguan.bilimusickmp.services.NeteaseService
+import com.zuoguan.bilimusickmp.services.NetEaseService
+import com.zuoguan.bilimusickmp.services.SongMetadataService
 import com.zuoguan.bilimusickmp.services.SongRepositoryService
 import com.zuoguan.bilimusickmp.utils.UiEvent
-import com.zuoguan.bilimusickmp.utils.enrichSongInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,11 +26,11 @@ import kotlinx.coroutines.launch
 
 class SearchPageViewModel(
     private val biliService: BiliService,
-    private val neteaseService: NeteaseService,
+    private val netEaseService: NetEaseService,
     private val audioPlayService: AudioPlayService,
-    private val extractSongBaseInfoService: ExtractSongBaseInfoService,
     private val songRepository: SongRepositoryService,
-    private val kuGouService: KuGouService
+    private val kuGouService: KuGouService,
+    private val songMetadataService: SongMetadataService
 ) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -81,7 +79,7 @@ class SearchPageViewModel(
                             .map { it.copy(audioSource = AudioSource.BILI_BILI) }
 
                     AudioSource.NET_EASE ->
-                        neteaseService.search(keyword)
+                        netEaseService.search(keyword)
                             .map { it.copy(audioSource = AudioSource.NET_EASE) }
 
                     AudioSource.KU_GOU -> {
@@ -122,7 +120,7 @@ class SearchPageViewModel(
                     }
 
                     AudioSource.NET_EASE -> {
-                        neteaseService.getAudioUrl(item.id)
+                        netEaseService.getAudioUrl(item.id)
                     }
 
                     AudioSource.KU_GOU -> {
@@ -135,7 +133,7 @@ class SearchPageViewModel(
                     AudioSource.BILI_BILI -> {emptyList()}
 
                     AudioSource.NET_EASE -> {
-                        neteaseService.getLyric(item.id)
+                        netEaseService.getLyric(item.id)
                     }
 
                     AudioSource.KU_GOU -> {
@@ -151,7 +149,7 @@ class SearchPageViewModel(
             }
             catch (e: Exception){
                 _uiEvents.send(
-                    UiEvent.ShowSnackbar(
+                    UiEvent.ShowSnackBar(
                         message = e.message!! + "，请重试",
                         duration = SnackbarDuration.Long
                     )
@@ -170,19 +168,14 @@ class SearchPageViewModel(
             try {
                 var song: Song
                 if (item.audioSource == AudioSource.BILI_BILI) {
-                    song = enrichSongInfo(
-                        extractSongBaseInfoService,
-                        biliService,
-                        kuGouService,
-                        Song().apply {
-                            id = item.id
-                            audioSource = item.audioSource
-                            title = item.title
-                            author = item.author
-                            pic = item.pic
-                            ts = System.currentTimeMillis()
-                        }
-                    )
+                    song = songMetadataService.resolve(Song().apply {
+                        id = item.id
+                        audioSource = item.audioSource
+                        title = item.title
+                        author = item.author
+                        pic = item.pic
+                        ts = System.currentTimeMillis()
+                    })
                 }
                 else
                 {
@@ -207,7 +200,7 @@ class SearchPageViewModel(
                     isExtractInfoLoading = false
                 )
                 _uiEvents.send(
-                    UiEvent.ShowSnackbar(
+                    UiEvent.ShowSnackBar(
                         message = e.message!!,
                         duration = SnackbarDuration.Long
                     )

@@ -1,6 +1,5 @@
 package com.zuoguan.bilimusickmp.services
 
-import androidx.annotation.RequiresApi
 import com.zuoguan.bilimusickmp.models.AudioSource
 import com.zuoguan.bilimusickmp.models.LyricLine
 import com.zuoguan.bilimusickmp.models.SearchResult
@@ -19,7 +18,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.security.MessageDigest
-import kotlin.collections.get
 import kotlin.io.encoding.Base64
 
 class KuGouService {
@@ -203,7 +201,7 @@ class KuGouService {
             val body = response.body.string()
             val json = Json.parseToJsonElement(body).jsonObject
 
-            val urlElement = json["url"]!!
+            val urlElement = json["url"] ?: throw IllegalStateException("获取音频链接错误")
 
             return when {
                 urlElement is JsonArray -> {

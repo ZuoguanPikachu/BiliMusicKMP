@@ -7,9 +7,10 @@ import com.zuoguan.bilimusickmp.services.ExoAudioPlayService
 import com.zuoguan.bilimusickmp.services.ExtractSongBaseInfoService
 import com.zuoguan.bilimusickmp.services.KuGouService
 import com.zuoguan.bilimusickmp.services.NavigationService
-import com.zuoguan.bilimusickmp.services.NeteaseService
+import com.zuoguan.bilimusickmp.services.NetEaseService
 import com.zuoguan.bilimusickmp.services.PreferencesStorageService
 import com.zuoguan.bilimusickmp.services.SongEditService
+import com.zuoguan.bilimusickmp.services.SongMetadataService
 import com.zuoguan.bilimusickmp.services.SongRepositoryService
 import com.zuoguan.bilimusickmp.vm.LyricsPageViewModel
 import com.zuoguan.bilimusickmp.vm.PlayBarViewModel
@@ -22,7 +23,7 @@ import org.koin.dsl.module
 
 val appModule = module {
     single { BiliService() }
-    single { NeteaseService() }
+    single { NetEaseService() }
     single { KuGouService() }
     single<PreferencesStorageService> { AndroidPreferencesStorageService(androidContext()) }
     single { ExtractSongBaseInfoService(get()) }
@@ -34,8 +35,9 @@ val appModule = module {
 
     single { NavigationService() }
     single { SongEditService() }
+    single { SongMetadataService(get(), get(), get(), get()) }
 
-    single { SongEditPageViewModel(get(), get(), get(), get(), get()) }
+    single { SongEditPageViewModel(get(), get(), get()) }
     single { PlaylistPageViewModel(get(), get(), get(), get(), get()) }
     single { SearchPageViewModel(get(), get(), get(), get(), get(), get()) }
     single { SettingsPageViewModel(get()) }

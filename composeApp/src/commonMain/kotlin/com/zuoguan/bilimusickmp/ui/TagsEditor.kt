@@ -19,8 +19,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -63,7 +63,7 @@ fun TagsEditor(
         var textFieldWidthPx by remember { mutableIntStateOf(0) }
         val density = LocalDensity.current
 
-        TextField(
+        OutlinedTextField(
             value = newTagText,
             onValueChange = onNewTagTextChange,
             label = { Text("添加标签") },
@@ -98,7 +98,7 @@ fun TagsEditor(
         if (suggestions.isNotEmpty()) {
             Popup(
                 alignment = Alignment.TopStart,
-                offset = IntOffset(0, 60)
+                offset = IntOffset(0, 64)
             ) {
                 Card(
                     modifier = Modifier.width(

@@ -1,8 +1,6 @@
 package com.zuoguan.bilimusickmp.services
 
 import android.content.Context
-import android.net.Uri
-import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -31,14 +29,8 @@ import okhttp3.OkHttpClient
 import java.net.URL
 import java.util.concurrent.TimeUnit
 import androidx.core.net.toUri
-import androidx.media3.datasource.ResolvingDataSource
-import androidx.media3.exoplayer.drm.DrmSessionManagerProvider
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import com.zuoguan.bilimusickmp.models.PlaySource
 import com.zuoguan.bilimusickmp.utils.convertImageUrl
-import kotlinx.coroutines.runBlocking
-import java.util.concurrent.ConcurrentHashMap
 
 class ExoAudioPlayService(
     context: Context

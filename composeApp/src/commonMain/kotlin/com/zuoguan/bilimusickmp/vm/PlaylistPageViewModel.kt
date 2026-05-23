@@ -9,10 +9,9 @@ import com.zuoguan.bilimusickmp.models.TrackInfo
 import com.zuoguan.bilimusickmp.services.AudioPlayService
 import com.zuoguan.bilimusickmp.services.BiliService
 import com.zuoguan.bilimusickmp.services.KuGouService
-import com.zuoguan.bilimusickmp.services.NeteaseService
+import com.zuoguan.bilimusickmp.services.NetEaseService
 import com.zuoguan.bilimusickmp.services.SongRepositoryService
 import com.zuoguan.bilimusickmp.utils.UiEvent
-import kotbase.Ordering
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -29,7 +28,7 @@ class PlaylistPageViewModel(
     private val songRepository: SongRepositoryService,
     private val audioPlayService: AudioPlayService,
     private val biliService: BiliService,
-    private val neteaseService: NeteaseService,
+    private val netEaseService: NetEaseService,
     private val kuGouService: KuGouService
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -145,7 +144,7 @@ class PlaylistPageViewModel(
                             }
 
                             AudioSource.NET_EASE -> {
-                                neteaseService.getAudioUrl(song.id)
+                                netEaseService.getAudioUrl(song.id)
                             }
 
                             AudioSource.KU_GOU -> {
@@ -157,7 +156,7 @@ class PlaylistPageViewModel(
                     lyricsProvider = {
                         when(song.lyricSource){
                             LyricSource.KU_GOU -> kuGouService.getLyric(song.lyricId)
-                            LyricSource.NET_EASE -> neteaseService.getLyric(song.lyricId)
+                            LyricSource.NET_EASE -> netEaseService.getLyric(song.lyricId)
                             LyricSource.NONE -> emptyList()
                         }
                     }
@@ -181,7 +180,7 @@ class PlaylistPageViewModel(
                     }
 
                     AudioSource.NET_EASE -> {
-                        neteaseService.getAudioUrl(song.id)
+                        netEaseService.getAudioUrl(song.id)
                     }
 
                     AudioSource.KU_GOU -> {
@@ -193,7 +192,7 @@ class PlaylistPageViewModel(
             lyricsProvider = {
                 when(song.lyricSource){
                     LyricSource.KU_GOU -> kuGouService.getLyric(song.lyricId)
-                    LyricSource.NET_EASE -> neteaseService.getLyric(song.lyricId)
+                    LyricSource.NET_EASE -> netEaseService.getLyric(song.lyricId)
                     LyricSource.NONE -> emptyList()
                 }
             }
@@ -204,7 +203,7 @@ class PlaylistPageViewModel(
             }
             catch (e: Exception){
                 _uiEvents.send(
-                    UiEvent.ShowSnackbar(
+                    UiEvent.ShowSnackBar(
                         message = e.message!!,
                         duration = SnackbarDuration.Long
                     )

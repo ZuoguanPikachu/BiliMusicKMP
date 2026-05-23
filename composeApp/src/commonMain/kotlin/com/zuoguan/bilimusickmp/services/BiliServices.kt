@@ -166,16 +166,43 @@ class BiliService {
             ensureWbiReady()
 
             val realCid = cid ?: getCid(bvid)
-            val json = JSONObject(get("https://api.bilibili.com/x/player/wbi/playurl?bvid=$bvid&cid=$realCid&fnval=16"))
-            val audios = json.getJSONObject("data").getJSONObject("dash").getJSONArray("audio")
-            return audios.getJSONObject(0).getString("baseUrl")
+
+            val response = get(
+                "https://api.bilibili.com/x/player/wbi/playurl" +
+                        "?bvid=$bvid&cid=$realCid&fnval=16"
+            )
+
+            val json = JSONObject(response)
+
+            val data = json.optJSONObject("data")
+                ?: throw IllegalStateException("Response missing data field")
+
+            val dash = data.optJSONObject("dash")
+                ?: throw IllegalStateException("Response missing dash field")
+
+            val audios = dash.optJSONArray("audio")
+                ?: throw IllegalStateException("Response missing audio field")
+
+            if (audios.length() == 0) {
+                throw IllegalStateException("Audio list is empty")
+            }
+
+            val bestAudio = (0 until audios.length())
+                .map { audios.getJSONObject(it) }
+                .maxByOrNull { it.optInt("id", -1) }
+                ?: throw IllegalStateException("No valid audio found")
+
+            return bestAudio.optString("baseUrl")
+                .takeIf { it.isNotBlank() }
+                ?: throw IllegalStateException("Audio baseUrl is missing")
         }
         catch (e: Exception) {
-            throw Exception("获取音频播放地址失败: ${e.message}", e)
+            throw IllegalStateException(
+                "获取音频播放地址失败(bvid=$bvid, cid=$cid): ${e.message}",
+                e
+            )
         }
-
     }
-
     // ---------------- HTTP ----------------
 
     private fun get(url: String): String =

@@ -9,8 +9,6 @@ import androidx.compose.material3.*
 import androidx.compose.ui.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.useResource
 import androidx.compose.ui.unit.*
 import androidx.compose.ui.window.rememberWindowState
 import bilimusickmp.composeapp.generated.resources.Res
@@ -132,6 +130,7 @@ fun ContentArea(page: Page) {
             Page.SEARCH -> SearchPage()
             Page.SETTINGS -> SettingsPage()
             Page.LYRICS -> LyricsPage()
+            else -> PlaylistPage()
         }
     }
 }

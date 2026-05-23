@@ -53,7 +53,7 @@ fun PlaylistPage(
     LaunchedEffect(Unit) {
         viewModel.uiEvents.collect { event ->
             when (event) {
-                is UiEvent.ShowSnackbar -> {
+                is UiEvent.ShowSnackBar -> {
                     coroutineScope.launch {
                         snackBarHostState.showSnackbar(
                             message = event.message,
@@ -181,17 +181,6 @@ fun PlaylistPage(
             onDismiss = viewModel::cancelDelete
         )
     }
-
-//    if (state.showEditDialog) {
-//        SongInfoEditDialog(
-//            "编辑歌曲",
-//            false,
-//            state.allTags,
-//            state.songToHandle!!,
-//            viewModel::confirmEdit,
-//            viewModel::cancelEdit
-//        )
-//    }
 }
 
 @Composable
@@ -398,63 +387,4 @@ private fun TagChip(
                     MaterialTheme.colorScheme.onSurface
         )
     )
-}
-
-
-@Composable
-fun DeleteSongConfirmDialog(
-    song: Song,
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text("删除歌曲")
-        },
-        text = {
-            Text("确定要删除「${song.title}」吗？")
-        },
-        confirmButton = {
-            TextButton(onClick = onConfirm) {
-                Text(
-                    text = "删除",
-                    color = MaterialTheme.colorScheme.error
-                )
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("取消")
-            }
-        }
-    )
-}
-
-@Composable
-fun TagFilterModeChips(
-    mode: TagFilterMode,
-    onModeChange: (TagFilterMode) -> Unit
-) {
-    Row(
-        modifier = Modifier.padding(horizontal = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        AssistChip(
-            onClick = { onModeChange(TagFilterMode.OR) },
-            label = { Text("OR") },
-            colors = AssistChipDefaults.assistChipColors(
-                containerColor = if (mode == TagFilterMode.OR) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
-                labelColor = if (mode == TagFilterMode.OR) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
-            )
-        )
-        AssistChip(
-            onClick = { onModeChange(TagFilterMode.AND) },
-            label = { Text("AND") },
-            colors = AssistChipDefaults.assistChipColors(
-                containerColor = if (mode == TagFilterMode.AND) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
-                labelColor = if (mode == TagFilterMode.AND) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
-            )
-        )
-    }
 }

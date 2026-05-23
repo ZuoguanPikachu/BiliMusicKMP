@@ -85,7 +85,7 @@ object WEAPIEncryptor {
     }
 }
 
-class NeteaseService {
+class NetEaseService {
     private val client = OkHttpClient()
     private val gson = Gson()
 
@@ -184,7 +184,9 @@ class NeteaseService {
                 Map::class.java
             ) ?: throw Exception("获取音频链接错误")
 
-            val url = (((json["data"] as List<*>)[0] as Map<*, *>)["url"] ?: "").toString()
+            val url = (((json["data"] as List<*>)[0] as Map<*, *>)["url"]
+                ?: throw IllegalStateException("获取音频链接错误"))
+                .toString()
 
             return@retry url
         }
