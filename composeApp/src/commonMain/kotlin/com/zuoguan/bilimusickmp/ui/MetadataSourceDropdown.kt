@@ -19,7 +19,7 @@ import com.zuoguan.bilimusickmp.models.label
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LyricSourceDropdown(
+fun MetadataSourceDropdown(
     selectedSource: LyricSource,
     onSourceChange: (LyricSource) -> Unit,
     modifier: Modifier = Modifier
@@ -38,7 +38,7 @@ fun LyricSourceDropdown(
             value = selectedSource.label,
             onValueChange = {},
             readOnly = true,
-            label = { Text("歌词来源") },
+            label = { Text("歌词/封面 来源") },
             trailingIcon = {
                 ExposedDropdownMenuDefaults.TrailingIcon(expanded)
             },

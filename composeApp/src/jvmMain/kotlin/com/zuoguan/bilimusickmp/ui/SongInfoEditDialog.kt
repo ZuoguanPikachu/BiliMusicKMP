@@ -34,7 +34,7 @@ fun SongInfoEditDialog(
 ) {
     var title by remember(song) { mutableStateOf(song?.title.orEmpty()) }
     var author by remember(song) { mutableStateOf(song?.author.orEmpty()) }
-    var lyricSource by remember(song) { mutableStateOf(song?.lyricSource) }
+    var metadataSource by remember(song) { mutableStateOf(song?.lyricSource) }
     var lyricId by remember(song) { mutableStateOf(song?.lyricId.orEmpty()) }
     var lyricBiasText by remember(song) { mutableStateOf(song?.lyricBias?.toString().orEmpty()) }
     var pic by remember(song) { mutableStateOf(song?.pic.orEmpty()) }
@@ -42,13 +42,27 @@ fun SongInfoEditDialog(
     var newTagText by remember { mutableStateOf("") }
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    suspend fun autoFill() {
-        if(title.isNotEmpty() && lyricId.isEmpty()){
-            lyricId = songMetadataService.resolveLyricId(lyricSource!!, title, author)
+    suspend fun resolveLyricId() {
+        if(title.isNotEmpty() && author.isNotEmpty()){
+            lyricId = songMetadataService.resolveLyricId(metadataSource!!, title, author)
         }
 
         if (lyricId.isNotEmpty() && pic.isEmpty()) {
-            pic = songMetadataService.resolvePic(lyricSource!!, lyricId)
+            pic = songMetadataService.resolvePic(metadataSource!!, lyricId)
+        }
+    }
+
+    suspend fun resolvePic() {
+        if(title.isNotEmpty() && author.isNotEmpty()){
+            val id = songMetadataService.resolveLyricId(metadataSource!!, title, author)
+
+            if (lyricId.isEmpty()){
+                lyricId = id
+            }
+
+            if (id.isNotEmpty()){
+                pic = songMetadataService.resolvePic(metadataSource!!, id)
+            }
         }
     }
 
@@ -62,7 +76,7 @@ fun SongInfoEditDialog(
                         onConfirm(it.apply {
                             this.title = title
                             this.author = author
-                            this.lyricSource = lyricSource!!
+                            this.lyricSource = metadataSource!!
                             this.lyricId = lyricId
                             lyricBias = lyricBiasText.toIntOrNull() ?: 0
                             this.pic = pic
@@ -86,7 +100,7 @@ fun SongInfoEditDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                if (isLoading) {
+                if (isLoading || song == null) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -112,8 +126,8 @@ fun SongInfoEditDialog(
                         modifier = Modifier.fillMaxWidth()
                     )
 
-                    LyricSourceDropdown(lyricSource!!, {
-                        lyricSource = it
+                    MetadataSourceDropdown(metadataSource!!, {
+                        metadataSource = it
                     })
 
                     OutlinedTextField(
@@ -126,7 +140,7 @@ fun SongInfoEditDialog(
                             IconButton(
                                 modifier = Modifier.pointerHoverIcon(PointerIcon.Default),
                                 onClick = {
-                                    scope.launch { autoFill() }
+                                    scope.launch { resolveLyricId() }
                                 }
                             ) {
                                 Icon(Icons.Default.AutoFixNormal, contentDescription = "自动填充")
@@ -157,7 +171,7 @@ fun SongInfoEditDialog(
                             IconButton(
                                 modifier = Modifier.pointerHoverIcon(PointerIcon.Default),
                                 onClick = {
-                                    scope.launch { autoFill() }
+                                    scope.launch { resolvePic() }
                                 }
                             ) {
                                 Icon(Icons.Default.AutoFixNormal, contentDescription = "自动填充")
