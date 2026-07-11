@@ -49,6 +49,9 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionToken
+import com.zuoguan.bilimusickmp.services.MusicPlaybackService
 import com.zuoguan.bilimusickmp.services.NavigationService
 import com.zuoguan.bilimusickmp.ui.LyricsPage
 import com.zuoguan.bilimusickmp.ui.PlayBar
@@ -70,6 +73,9 @@ class MainActivity : ComponentActivity() {
                 ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 100)
             }
         }
+
+        val sessionToken = SessionToken(this, ComponentName(this, MusicPlaybackService::class.java))
+        MediaController.Builder(this, sessionToken).buildAsync()
 
         setContent {
             App()
