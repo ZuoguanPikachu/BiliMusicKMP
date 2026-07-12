@@ -20,7 +20,11 @@ Windows端的音乐播放依赖于VLC，所以需要在默认路径安装[VLC me
 
   非常建议使用！便于从网易云获取歌曲ID、歌词、封面
 
-  推荐使用：[LongCat](https://longcat.chat/platform/)，免费 + 快速
+  免费的大模型API：
+
+  * [智谱GLM（链接含邀请码）](https://www.bigmodel.cn/login?icode=Pe+h7w7M3Gx9gG4r3CNzLEjPr3uHog9F4g5tjuOUqno=&from=invite&redirect=/)的glm-4.7-flash
+
+  * [GPT_API_free](https://github.com/chatanywhere/GPT_API_free)
 
 - [x] 歌词、封面
 
