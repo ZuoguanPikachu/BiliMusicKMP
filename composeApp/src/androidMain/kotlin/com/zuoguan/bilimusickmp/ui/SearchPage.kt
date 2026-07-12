@@ -1,35 +1,30 @@
 package com.zuoguan.bilimusickmp.ui
 
-import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.*
 import androidx.compose.ui.input.pointer.*
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.style.*
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
-import io.kamel.core.Resource
-import io.kamel.image.asyncPainterResource
 import org.koin.compose.koinInject
 import com.zuoguan.bilimusickmp.LocalSnackBarHostState
 import com.zuoguan.bilimusickmp.models.AudioSource
 import com.zuoguan.bilimusickmp.models.LyricSource
 import com.zuoguan.bilimusickmp.models.Page
-import com.zuoguan.bilimusickmp.models.SearchResult
 import com.zuoguan.bilimusickmp.models.Song
 import com.zuoguan.bilimusickmp.services.NavigationService
 import com.zuoguan.bilimusickmp.services.SongEditService
 import com.zuoguan.bilimusickmp.utils.UiEvent
-import com.zuoguan.bilimusickmp.utils.convertImageUrl
 import com.zuoguan.bilimusickmp.vm.SearchPageViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -129,134 +124,71 @@ fun SearchPage(
             }
 
             if (!state.isSearchLoading && state.searchError == null) {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 96.dp)
-                ) {
-                    items(state.results) { item ->
-                        SearchResultItem(
-                            item,
-                            onItemClick = viewModel::playSong,
-                            onAddButtonClick = {
-                                songEditService.editSong(Song().apply {
-                                    id = item.id
-                                    audioSource = item.audioSource
-                                    title = item.title
-                                    author = item.author
-                                    pic = item.pic
-                                    lyricId = if (item.audioSource != AudioSource.BILI_BILI) item.id else ""
-                                    lyricSource = when(item.audioSource){
-                                        AudioSource.BILI_BILI -> LyricSource.NONE
-                                        AudioSource.KU_GOU -> LyricSource.KU_GOU
-                                        AudioSource.NET_EASE -> LyricSource.NET_EASE
-                                    }
-                                    ts = System.currentTimeMillis()
-                                }, "Search")
-                                navigationService.navigate(Page.SONG_EDIT)
-                            }
-                        )
-                    }
-                }
-            }
+                val windowInfo = LocalWindowInfo.current
+                val density = LocalDensity.current
+                val windowWidthDp = with(density) { windowInfo.containerSize.width.toDp() }
+                val isTablet = windowWidthDp >= 600.dp
 
-        }
-    }
-}
-@Composable
-fun SearchResultItem(
-    item: SearchResult,
-    onItemClick: (SearchResult) -> Unit,
-    onAddButtonClick: (SearchResult) -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        onClick = { onItemClick(item) },
-        shape = RectangleShape
-    ) {
-        Row(
-            modifier = Modifier
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-                .height(IntrinsicSize.Min)
-        ) {
-            Box(
-                modifier = Modifier
-                    .weight(0.8f)
-                    .aspectRatio(1.6f)
-                    .clip(RoundedCornerShape(12.dp))
-            ) {
-                when (val resource = asyncPainterResource(convertImageUrl(item.pic, 320, 200))) {
-                    is Resource.Loading -> {
-                        CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                if (isTablet) {
+                    LazyVerticalGrid(
+                        modifier = Modifier.fillMaxSize(),
+                        columns = GridCells.Adaptive(256.dp),
+                        contentPadding = PaddingValues(bottom = 96.dp)
+                    ) {
+                        items(state.results) { item ->
+                            PcSearchResultItem(
+                                item,
+                                onItemClick = viewModel::playSong,
+                                onAddButtonClick = {
+                                    songEditService.editSong(Song().apply {
+                                        id = item.id
+                                        audioSource = item.audioSource
+                                        title = item.title
+                                        author = item.author
+                                        pic = item.pic
+                                        lyricId = if (item.audioSource != AudioSource.BILI_BILI) item.id else ""
+                                        lyricSource = when(item.audioSource){
+                                            AudioSource.BILI_BILI -> LyricSource.NONE
+                                            AudioSource.KU_GOU -> LyricSource.KU_GOU
+                                            AudioSource.NET_EASE -> LyricSource.NET_EASE
+                                        }
+                                        ts = System.currentTimeMillis()
+                                    }, "Search")
+                                    navigationService.navigate(Page.SONG_EDIT)
+                                }
+                            )
+                        }
                     }
-                    is Resource.Success -> {
-                        Image(
-                            painter = resource.value,
-                            contentDescription = item.title,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                    }
-                    is Resource.Failure -> {
-                        Box(modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color.Gray)) {
-                            Text("加载失败", modifier = Modifier.align(Alignment.Center))
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(bottom = 96.dp)
+                    ) {
+                        items(state.results) { item ->
+                            MobileSearchResultItem(
+                                item,
+                                onItemClick = viewModel::playSong,
+                                onAddButtonClick = {
+                                    songEditService.editSong(Song().apply {
+                                        id = item.id
+                                        audioSource = item.audioSource
+                                        title = item.title
+                                        author = item.author
+                                        pic = item.pic
+                                        lyricId = if (item.audioSource != AudioSource.BILI_BILI) item.id else ""
+                                        lyricSource = when(item.audioSource){
+                                            AudioSource.BILI_BILI -> LyricSource.NONE
+                                            AudioSource.KU_GOU -> LyricSource.KU_GOU
+                                            AudioSource.NET_EASE -> LyricSource.NET_EASE
+                                        }
+                                        ts = System.currentTimeMillis()
+                                    }, "Search")
+                                    navigationService.navigate(Page.SONG_EDIT)
+                                }
+                            )
                         }
                     }
                 }
-
-                Text(
-                    text = item.duration,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.White,
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(6.dp)
-                        .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(6.dp))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                )
-            }
-
-            Spacer(Modifier.width(12.dp))
-
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight(),
-                verticalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = item.title,
-                    style = MaterialTheme.typography.titleSmall,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth(),
-                ){
-                    Text(
-                        text = item.author,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
-
-                    )
-
-                    IconButton(
-                        onClick = { onAddButtonClick(item) },
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = "添加")
-                    }
-                }
-
             }
         }
     }
