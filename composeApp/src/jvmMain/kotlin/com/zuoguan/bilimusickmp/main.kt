@@ -43,7 +43,6 @@ fun main() {
             onCloseRequest = ::exitApplication,
             title = "BiliMusic",
             state = rememberWindowState(width = 1400.dp, height = 900.dp),
-            resizable = false,
             icon = painterResource(Res.drawable.bili_music)
         ) {
             MaterialTheme { App() }

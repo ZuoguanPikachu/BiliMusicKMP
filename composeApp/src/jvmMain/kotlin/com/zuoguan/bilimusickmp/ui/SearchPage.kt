@@ -18,6 +18,7 @@ import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import io.kamel.core.Resource
 import io.kamel.image.asyncPainterResource
 import kotlinx.coroutines.launch
@@ -174,15 +175,15 @@ fun SearchResultItem(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { onItemClick(item) }
-                .padding(top = 16.dp, bottom = 8.dp),
+                .padding(top = 16.dp, bottom = 8.dp, start = 16.dp, end = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ){
             Box(
                 modifier = Modifier
-                    .width(256.dp)
-                    .height(160.dp)
+                    .fillMaxWidth()
+                    .aspectRatio(1.6f)
             ) {
-                when (val resource = asyncPainterResource(convertImageUrl(item.pic, 256, 160))) {
+                when (val resource = asyncPainterResource(convertImageUrl(item.pic, 512, 320))) {
                     is Resource.Loading -> {
                         CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                     }
@@ -193,14 +194,16 @@ fun SearchResultItem(
                             contentDescription = item.title,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier
-                                .width(256.dp)
-                                .height(160.dp)
+                                .fillMaxSize()
                                 .clip(RoundedCornerShape(12.dp))
-                                .align(Alignment.Center)
                         )
                     }
                     is Resource.Failure -> {
-                        Text(resource.exception.toString())
+                        Box(modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Gray)) {
+                            Text("加载失败", modifier = Modifier.align(Alignment.Center))
+                        }
                     }
                 }
 
@@ -225,12 +228,12 @@ fun SearchResultItem(
                 style = MaterialTheme.typography.titleMedium,
                 maxLines = 2,
                 minLines = 2,
-                modifier = Modifier.width(256.dp)
+                modifier = Modifier.fillMaxWidth()
             )
             Spacer(modifier = Modifier.height(8.dp))
 
             Row(
-                modifier = Modifier.width(256.dp),
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ){
@@ -239,6 +242,8 @@ fun SearchResultItem(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
                 )
                 IconButton(
                     onClick = { onAddButtonClick(item) },
