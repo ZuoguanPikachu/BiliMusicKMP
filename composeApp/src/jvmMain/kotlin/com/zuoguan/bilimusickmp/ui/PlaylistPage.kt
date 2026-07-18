@@ -30,6 +30,7 @@ import com.zuoguan.bilimusickmp.utils.UiEvent
 import com.zuoguan.bilimusickmp.utils.convertImageUrl
 import com.zuoguan.bilimusickmp.vm.PlaylistPageViewModel
 import com.zuoguan.bilimusickmp.vm.TagFilterMode
+import kotlin.text.contains
 
 @Composable
 fun PlaylistPage(
@@ -240,7 +241,7 @@ fun ExpandableMultiTagSelector(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     tags.forEach { tag ->
-                        TagChip(tag, selectedTags, onTagToggle)
+                        TagChip(tag, tag in selectedTags, onTagToggle)
                     }
                 }
 
@@ -269,7 +270,7 @@ fun ExpandableMultiTagSelector(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     tags.forEach { tag ->
-                        TagChip(tag, selectedTags, onTagToggle)
+                        TagChip(tag, tag in selectedTags, onTagToggle)
                     }
                 }
 
@@ -291,26 +292,4 @@ fun ExpandableMultiTagSelector(
     }
 }
 
-@Composable
-private fun TagChip(
-    tag: String,
-    selectedTags: Set<String>,
-    onTagToggle: (String) -> Unit
-) {
-    AssistChip(
-        onClick = { onTagToggle(tag) },
-        label = { Text(tag) },
-        colors = AssistChipDefaults.assistChipColors(
-            containerColor =
-                if (tag in selectedTags)
-                    MaterialTheme.colorScheme.primaryContainer
-                else
-                    MaterialTheme.colorScheme.surface,
-            labelColor =
-                if (tag in selectedTags)
-                    MaterialTheme.colorScheme.onPrimaryContainer
-                else
-                    MaterialTheme.colorScheme.onSurface
-        )
-    )
-}
+

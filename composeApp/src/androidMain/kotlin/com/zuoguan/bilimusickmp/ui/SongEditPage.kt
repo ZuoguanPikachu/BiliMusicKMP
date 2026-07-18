@@ -24,7 +24,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -196,16 +195,23 @@ fun SongEditPage(
 
             item {
                 TagsEditor(
-                    tags = tags,
+                    selectedTags = tags,
                     allTags = allTags,
                     newTagText = newTagText,
                     onNewTagTextChange = { newTagText = it },
                     onAddTag = { tag ->
-                        if (tag !in tags) tags = tags + tag
+                        if (tag !in allTags){
+                            allTags += tag
+                            tags += tag
+                        }
                         newTagText = ""
                     },
-                    onRemoveTag = { tag ->
-                        tags = tags - tag
+                    onToggleTag = { tag ->
+                        if (tag in tags){
+                            tags -= tag
+                        }else{
+                            tags += tag
+                        }
                     }
                 )
             }

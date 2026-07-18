@@ -32,6 +32,7 @@ fun SongInfoEditDialog(
     onDismiss: () -> Unit,
     songMetadataService: SongMetadataService = koinInject()
 ) {
+    var allTags by remember{mutableStateOf(allTags)}
     var title by remember(song) { mutableStateOf(song?.title.orEmpty()) }
     var author by remember(song) { mutableStateOf(song?.author.orEmpty()) }
     var metadataSource by remember(song) { mutableStateOf(song?.lyricSource) }
@@ -180,16 +181,23 @@ fun SongInfoEditDialog(
                     )
 
                     TagsEditor(
-                        tags = tags,
+                        selectedTags = tags,
                         allTags = allTags,
                         newTagText = newTagText,
                         onNewTagTextChange = { newTagText = it },
                         onAddTag = { tag ->
-                            if (tag !in tags) tags = tags + tag
+                            if (tag !in allTags){
+                                allTags += tag
+                                tags += tag
+                            }
                             newTagText = ""
                         },
-                        onRemoveTag = { tag ->
-                            tags = tags - tag
+                        onToggleTag = { tag ->
+                            if (tag in tags){
+                                tags -= tag
+                            }else{
+                                tags += tag
+                            }
                         }
                     )
                 }
