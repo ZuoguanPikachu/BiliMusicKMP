@@ -75,7 +75,7 @@ android {
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = 1
-        versionName = "1.1.2"
+        versionName = "1.1.3"
     }
     packaging {
         resources {
@@ -104,7 +104,7 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "BiliMusic"
-            packageVersion = "1.1.2"
+            packageVersion = "1.1.3"
             windows {
                 iconFile.set(project.file("src/jvmMain/composeResources/drawable/bili_music.ico"))
             }
