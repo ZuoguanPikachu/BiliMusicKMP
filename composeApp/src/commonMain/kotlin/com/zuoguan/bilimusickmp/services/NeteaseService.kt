@@ -9,6 +9,7 @@ import com.google.gson.Gson
 import com.zuoguan.bilimusickmp.models.AudioSource
 import com.zuoguan.bilimusickmp.models.LyricLine
 import com.zuoguan.bilimusickmp.models.SearchResult
+import com.zuoguan.bilimusickmp.utils.NoRetryException
 import com.zuoguan.bilimusickmp.utils.retry
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
@@ -184,9 +185,9 @@ class NetEaseService {
                 Map::class.java
             ) ?: throw Exception("获取音频链接错误")
 
-            val url = (((json["data"] as List<*>)[0] as Map<*, *>)["url"]
-                ?: throw IllegalStateException("获取音频链接错误"))
-                .toString()
+            val urlObj = ((json["data"] as List<*>)[0] as Map<*, *>)["url"]
+                ?: throw NoRetryException("可能是VIP歌曲，无法获取音频链接")
+            val url = urlObj.toString()
 
             return@retry url
         }

@@ -80,7 +80,7 @@ class KuGouService {
         }
     }
 
-    suspend fun getIdByTitleAndAuthor(title: String, author: String): String {
+    fun getIdByTitleAndAuthor(title: String, author: String): String {
         val url = HttpUrl.Builder()
             .scheme("http")
             .host("mobilecdn.kugou.com")
