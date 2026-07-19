@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import com.zuoguan.bilimusickmp.LocalSnackBarHostState
 import com.zuoguan.bilimusickmp.models.AudioSource
+import com.zuoguan.bilimusickmp.models.CoverSource
 import com.zuoguan.bilimusickmp.models.LyricSource
 import com.zuoguan.bilimusickmp.models.Page
 import com.zuoguan.bilimusickmp.models.Song
@@ -145,13 +146,19 @@ fun SearchPage(
                                         audioSource = item.audioSource
                                         title = item.title
                                         author = item.author
-                                        pic = item.pic
                                         lyricId = if (item.audioSource != AudioSource.BILI_BILI) item.id else ""
-                                        lyricSource = when(item.audioSource){
+                                        lyricSource = when(item.audioSource) {
                                             AudioSource.BILI_BILI -> LyricSource.NONE
                                             AudioSource.KU_GOU -> LyricSource.KU_GOU
                                             AudioSource.NET_EASE -> LyricSource.NET_EASE
                                         }
+                                        coverId = if (item.audioSource != AudioSource.BILI_BILI) item.id else ""
+                                        coverSource  = when(item.audioSource) {
+                                            AudioSource.BILI_BILI -> CoverSource.BILI_BILI
+                                            AudioSource.KU_GOU -> CoverSource.KU_GOU
+                                            AudioSource.NET_EASE -> CoverSource.NET_EASE
+                                        }
+                                        pic = item.pic
                                         ts = System.currentTimeMillis()
                                     }, "Search")
                                     navigationService.navigate(Page.SONG_EDIT)
@@ -174,13 +181,19 @@ fun SearchPage(
                                         audioSource = item.audioSource
                                         title = item.title
                                         author = item.author
-                                        pic = item.pic
                                         lyricId = if (item.audioSource != AudioSource.BILI_BILI) item.id else ""
-                                        lyricSource = when(item.audioSource){
+                                        lyricSource = when(item.audioSource) {
                                             AudioSource.BILI_BILI -> LyricSource.NONE
                                             AudioSource.KU_GOU -> LyricSource.KU_GOU
                                             AudioSource.NET_EASE -> LyricSource.NET_EASE
                                         }
+                                        coverId = if (item.audioSource != AudioSource.BILI_BILI) item.id else ""
+                                        coverSource  = when(item.audioSource) {
+                                            AudioSource.BILI_BILI -> CoverSource.BILI_BILI
+                                            AudioSource.KU_GOU -> CoverSource.KU_GOU
+                                            AudioSource.NET_EASE -> CoverSource.NET_EASE
+                                        }
+                                        pic = item.pic
                                         ts = System.currentTimeMillis()
                                     }, "Search")
                                     navigationService.navigate(Page.SONG_EDIT)
