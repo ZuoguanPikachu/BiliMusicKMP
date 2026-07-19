@@ -1,6 +1,8 @@
 package com.zuoguan.bilimusickmp.services
 
+import com.zuoguan.bilimusickmp.models.CoverSource
 import com.zuoguan.bilimusickmp.models.LyricSource
+import com.zuoguan.bilimusickmp.models.MetadataSource
 import com.zuoguan.bilimusickmp.models.Song
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -17,12 +19,14 @@ class SongMetadataService(
             val title = songBaseInfo.title.ifEmpty { song.title }
             val author = songBaseInfo.author
 
-            var lyricId = ""
+            var songId = ""
             var pic = song.pic
+            song.coverSource = CoverSource.BILI_BILI
             if (songBaseInfo.title.isNotEmpty() && songBaseInfo.author.isNotEmpty()) {
-                lyricId = kuGouService.getIdByTitleAndAuthor(title, author)
-                if (lyricId.isNotEmpty()){
-                    pic = kuGouService.getImageUrl(lyricId)
+                songId = kuGouService.getIdByTitleAndAuthor(title, author)
+                if (songId.isNotEmpty()){
+                    pic = kuGouService.getImageUrl(songId)
+                    song.coverSource = CoverSource.KU_GOU
                 }
             }
 
@@ -31,9 +35,11 @@ class SongMetadataService(
                 audioSource = song.audioSource
                 this.title = title
                 this.author = author
-                this.pic = pic
                 this.lyricSource = LyricSource.KU_GOU
-                this.lyricId = lyricId
+                this.lyricId = songId
+                this.coverSource = song.coverSource
+                this.coverId = songId
+                this.pic = pic
                 ts = song.ts
             }
         }
@@ -47,25 +53,25 @@ class SongMetadataService(
         }
     }
 
-    suspend fun resolveLyricId(
-        source: LyricSource,
+    suspend fun resolveSongId(
+        source: MetadataSource,
         title: String,
         author: String
     ): String {
-        return when(source){
-            LyricSource.KU_GOU -> kuGouService.getIdByTitleAndAuthor(title, author)
-            LyricSource.NET_EASE -> netEaseService.getIdByTitleAndAuthor(title, author)
+        return when(source.label){
+            "酷狗音乐" -> kuGouService.getIdByTitleAndAuthor(title, author)
+            "网易云音乐" -> netEaseService.getIdByTitleAndAuthor(title, author)
             else -> ""
         }
     }
 
-    suspend fun resolvePic(
-        source: LyricSource,
+    fun resolvePic(
+        source: CoverSource,
         id: String
     ): String{
         return when(source){
-            LyricSource.KU_GOU -> kuGouService.getImageUrl(id)
-            LyricSource.NET_EASE -> netEaseService.getImageUrl(id)
+            CoverSource.KU_GOU -> kuGouService.getImageUrl(id)
+            CoverSource.NET_EASE -> netEaseService.getImageUrl(id)
             else -> ""
         }
     }

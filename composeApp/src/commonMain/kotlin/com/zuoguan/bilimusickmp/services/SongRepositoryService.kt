@@ -1,6 +1,7 @@
 package com.zuoguan.bilimusickmp.services
 
 import com.zuoguan.bilimusickmp.models.AudioSource
+import com.zuoguan.bilimusickmp.models.CoverSource
 import com.zuoguan.bilimusickmp.models.LyricSource
 import com.zuoguan.bilimusickmp.utils.DatabaseHelper
 import com.zuoguan.bilimusickmp.models.Song
@@ -38,15 +39,17 @@ class SongRepositoryService {
     fun saveSong(song: Song, refresh: Boolean = true) {
         val doc = MutableDocument(song.id)
             .apply {
+                setString("cid", song.cid)
                 setString("audioSource", song.audioSource.name)
                 setString("title", song.title)
                 setString("author", song.author)
-                setString("pic", song.pic)
                 setArray("tags", MutableArray(song.tags))
-                setString("cid", song.cid)
                 setString("lyricSource", song.lyricSource.name)
                 setString("lyricId", song.lyricId)
                 setInt("lyricBias", song.lyricBias)
+                setString("coverSource", song.coverSource.name)
+                setString("coverId", song.coverId)
+                setString("pic", song.pic)
                 setLong("ts", song.ts)
             }
 
@@ -68,15 +71,17 @@ class SongRepositoryService {
         val query = QueryBuilder
             .select(
                 SelectResult.expression(Meta.id).`as`("id"),
+                SelectResult.property("cid"),
                 SelectResult.property("audioSource"),
                 SelectResult.property("title"),
                 SelectResult.property("author"),
-                SelectResult.property("pic"),
                 SelectResult.property("tags"),
-                SelectResult.property("cid"),
                 SelectResult.property("lyricSource"),
                 SelectResult.property("lyricId"),
                 SelectResult.property("lyricBias"),
+                SelectResult.property("coverSource"),
+                SelectResult.property("coverId"),
+                SelectResult.property("pic"),
                 SelectResult.property("ts")
             )
             .from(DataSource.collection(coll))
@@ -84,22 +89,26 @@ class SongRepositoryService {
         return query.execute().mapNotNull { row ->
             Song().apply {
                 id = row.getString("id") ?: return@mapNotNull null
+                cid = row.getString("cid") ?: ""
                 audioSource = row.getString("audioSource")
                     ?.let { runCatching { AudioSource.valueOf(it) }.getOrNull() }
                     ?: AudioSource.BILI_BILI
                 title = row.getString("title") ?: ""
                 author = row.getString("author") ?: ""
-                pic = row.getString("pic") ?: ""
                 tags = row.getArray("tags")
                     ?.toList()
                     ?.mapNotNull { it.toString() }
                     ?: emptyList()
-                cid = row.getString("cid") ?: ""
                 lyricSource = row.getString("lyricSource")
                     ?.let { runCatching { LyricSource.valueOf(it) }.getOrNull() }
                     ?: LyricSource.NONE
                 lyricId = row.getString("lyricId") ?: ""
                 lyricBias = row.getInt("lyricBias")
+                coverSource = row.getString("coverSource")
+                    ?.let { runCatching { CoverSource.valueOf(it) }.getOrNull() }
+                    ?: CoverSource.NONE
+                coverId = row.getString("coverId") ?: ""
+                pic = row.getString("pic") ?: ""
                 ts = row.getLong("ts")
             }
         }

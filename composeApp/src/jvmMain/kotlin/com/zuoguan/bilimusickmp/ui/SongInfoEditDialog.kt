@@ -14,6 +14,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
+import com.zuoguan.bilimusickmp.models.CoverSource
+import com.zuoguan.bilimusickmp.models.LyricSource
 import com.zuoguan.bilimusickmp.models.Song
 import com.zuoguan.bilimusickmp.services.SongMetadataService
 import kotlinx.coroutines.CoroutineScope
@@ -35,9 +37,11 @@ fun SongInfoEditDialog(
     var allTags by remember{mutableStateOf(allTags)}
     var title by remember(song) { mutableStateOf(song?.title.orEmpty()) }
     var author by remember(song) { mutableStateOf(song?.author.orEmpty()) }
-    var metadataSource by remember(song) { mutableStateOf(song?.lyricSource) }
+    var lyricSource by remember(song) { mutableStateOf(song?.lyricSource) }
     var lyricId by remember(song) { mutableStateOf(song?.lyricId.orEmpty()) }
     var lyricBiasText by remember(song) { mutableStateOf(song?.lyricBias?.toString().orEmpty()) }
+    var coverSource by remember(song) { mutableStateOf(song?.coverSource) }
+    var coverId by remember(song) { mutableStateOf(song?.coverId.orEmpty()) }
     var pic by remember(song) { mutableStateOf(song?.pic.orEmpty()) }
     var tags by remember(song) { mutableStateOf(song?.tags.orEmpty()) }
     var newTagText by remember { mutableStateOf("") }
@@ -45,25 +49,22 @@ fun SongInfoEditDialog(
 
     suspend fun resolveLyricId() {
         if(title.isNotEmpty() && author.isNotEmpty()){
-            lyricId = songMetadataService.resolveLyricId(metadataSource!!, title, author)
-        }
-
-        if (lyricId.isNotEmpty() && pic.isEmpty()) {
-            pic = songMetadataService.resolvePic(metadataSource!!, lyricId)
+            lyricId = songMetadataService.resolveSongId(lyricSource!!, title, author)
         }
     }
 
-    suspend fun resolvePic() {
+    suspend fun resolveCoverId() {
         if(title.isNotEmpty() && author.isNotEmpty()){
-            val id = songMetadataService.resolveLyricId(metadataSource!!, title, author)
-
-            if (lyricId.isEmpty()){
-                lyricId = id
+            coverId = songMetadataService.resolveSongId(coverSource!!, title, author)
+            if (coverId.isNotEmpty()){
+                pic = songMetadataService.resolvePic(coverSource!!, coverId)
             }
+        }
+    }
 
-            if (id.isNotEmpty()){
-                pic = songMetadataService.resolvePic(metadataSource!!, id)
-            }
+    fun resolvePicFromCoverId() {
+        if (coverId.isNotEmpty()){
+            pic = songMetadataService.resolvePic(coverSource!!, coverId)
         }
     }
 
@@ -77,9 +78,11 @@ fun SongInfoEditDialog(
                         onConfirm(it.apply {
                             this.title = title
                             this.author = author
-                            this.lyricSource = metadataSource!!
+                            this.lyricSource = lyricSource!!
                             this.lyricId = lyricId
                             lyricBias = lyricBiasText.toIntOrNull() ?: 0
+                            this.coverSource = coverSource!!
+                            this.coverId = coverId
                             this.pic = pic
                             this.tags = tags.ifEmpty { listOf("Default") }
                         })
@@ -127,10 +130,10 @@ fun SongInfoEditDialog(
                         modifier = Modifier.fillMaxWidth()
                     )
 
-                    MetadataSourceDropdown(metadataSource!!, {
-                        metadataSource = it
+                    Text("歌词", style = MaterialTheme.typography.titleMedium)
+                    MetadataSourceDropdown(LyricSource.entries, lyricSource!!, {
+                        lyricSource = it as LyricSource?
                     })
-
                     OutlinedTextField(
                         value = lyricId,
                         onValueChange = { lyricId = it },
@@ -144,11 +147,10 @@ fun SongInfoEditDialog(
                                     scope.launch { resolveLyricId() }
                                 }
                             ) {
-                                Icon(Icons.Default.AutoFixNormal, contentDescription = "自动填充")
+                                Icon(Icons.Default.AutoFixNormal, contentDescription = "自动获取歌词ID")
                             }
                         }
                     )
-
                     OutlinedTextField(
                         value = lyricBiasText,
                         onValueChange = { input ->
@@ -162,24 +164,50 @@ fun SongInfoEditDialog(
                         modifier = Modifier.fillMaxWidth()
                     )
 
+                    Text("封面", style = MaterialTheme.typography.titleMedium)
+                    MetadataSourceDropdown(CoverSource.entries,  coverSource!!, {
+                        coverSource = it as CoverSource?
+                    })
+                    if (coverSource != CoverSource.BILI_BILI){
+                        OutlinedTextField(
+                            value = coverId,
+                            onValueChange = { coverId = it },
+                            label = { Text("封面ID") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            trailingIcon = {
+                                IconButton(
+                                    modifier = Modifier.pointerHoverIcon(PointerIcon.Default),
+                                    onClick = {
+                                        scope.launch { resolveCoverId() }
+                                    }
+                                ) {
+                                    Icon(Icons.Default.AutoFixNormal, contentDescription = "自动获取封面ID")
+                                }
+                            }
+                        )
+                    }
                     OutlinedTextField(
                         value = pic,
                         onValueChange = { pic = it },
-                        label = { Text("封面") },
+                        label = { Text("封面URL") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         trailingIcon = {
-                            IconButton(
-                                modifier = Modifier.pointerHoverIcon(PointerIcon.Default),
-                                onClick = {
-                                    scope.launch { resolvePic() }
+                            if (coverSource != CoverSource.BILI_BILI){
+                                IconButton(
+                                    modifier = Modifier.pointerHoverIcon(PointerIcon.Default),
+                                    onClick = {
+                                        scope.launch { resolvePicFromCoverId() }
+                                    }
+                                ) {
+                                    Icon(Icons.Default.AutoFixNormal, contentDescription = "根据封面ID获取URL")
                                 }
-                            ) {
-                                Icon(Icons.Default.AutoFixNormal, contentDescription = "自动填充")
                             }
                         }
                     )
 
+                    Text("TAG", style = MaterialTheme.typography.titleMedium)
                     TagsEditor(
                         selectedTags = tags,
                         allTags = allTags,

@@ -9,11 +9,12 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.util.concurrent.TimeUnit
 
 class ExtractSongBaseInfoService(
     private val preferencesStorageService: PreferencesStorageService
 ) {
-    private val httpClient = OkHttpClient()
+    private val httpClient = OkHttpClient.Builder().callTimeout(30, TimeUnit.SECONDS).build()
     private val gson = Gson()
 
     private val systemPrompt = """

@@ -14,14 +14,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import com.zuoguan.bilimusickmp.models.CoverSource
 import com.zuoguan.bilimusickmp.models.LyricSource
-import com.zuoguan.bilimusickmp.models.label
+import com.zuoguan.bilimusickmp.models.MetadataSource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MetadataSourceDropdown(
-    selectedSource: LyricSource,
-    onSourceChange: (LyricSource) -> Unit,
+    sources: List<MetadataSource>,
+    selectedSource: MetadataSource,
+    onSourceChange: (MetadataSource) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -38,7 +40,7 @@ fun MetadataSourceDropdown(
             value = selectedSource.label,
             onValueChange = {},
             readOnly = true,
-            label = { Text("歌词/封面 来源") },
+            label = { Text("来源") },
             trailingIcon = {
                 ExposedDropdownMenuDefaults.TrailingIcon(expanded)
             },
@@ -53,8 +55,8 @@ fun MetadataSourceDropdown(
                 expanded = false
             }
         ) {
-            LyricSource.entries
-                .filter { it != LyricSource.NONE }
+            sources
+                .filter { !(it == LyricSource.NONE || it == CoverSource.NONE) }
                 .forEach { source ->
 
                     DropdownMenuItem(

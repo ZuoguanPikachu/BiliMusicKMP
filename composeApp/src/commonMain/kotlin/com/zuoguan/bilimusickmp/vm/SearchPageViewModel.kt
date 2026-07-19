@@ -2,6 +2,7 @@ package com.zuoguan.bilimusickmp.vm
 
 import androidx.compose.material3.SnackbarDuration
 import com.zuoguan.bilimusickmp.models.AudioSource
+import com.zuoguan.bilimusickmp.models.CoverSource
 import com.zuoguan.bilimusickmp.models.LyricSource
 import com.zuoguan.bilimusickmp.models.PlaySource
 import com.zuoguan.bilimusickmp.models.SearchResult
@@ -184,9 +185,11 @@ class SearchPageViewModel(
                         audioSource = item.audioSource
                         title = item.title
                         author = item.author
-                        pic = item.pic
                         lyricSource = if (item.audioSource == AudioSource.KU_GOU) LyricSource.KU_GOU  else LyricSource.NET_EASE
                         lyricId = item.id
+                        coverSource = if (item.audioSource == AudioSource.KU_GOU) CoverSource.KU_GOU  else CoverSource.NET_EASE
+                        coverId = item.id
+                        pic = item.pic
                         ts = System.currentTimeMillis()
                     }
                 }
