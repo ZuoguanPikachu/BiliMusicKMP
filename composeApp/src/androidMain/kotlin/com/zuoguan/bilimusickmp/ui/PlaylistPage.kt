@@ -37,7 +37,6 @@ import com.zuoguan.bilimusickmp.utils.UiEvent
 import com.zuoguan.bilimusickmp.utils.convertImageUrl
 import com.zuoguan.bilimusickmp.vm.PlaylistPageViewModel
 import com.zuoguan.bilimusickmp.vm.TagFilterMode
-import kotlin.text.contains
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -69,7 +68,7 @@ fun PlaylistPage(
     }
 
     val hapticFeedback = LocalHapticFeedback.current
-    val lazyListState = rememberLazyListState()
+    val lazyListState = viewModel.lazyListState
     val reorderState = rememberReorderableLazyListState(
         lazyListState = lazyListState,
         onMove = { from, to ->

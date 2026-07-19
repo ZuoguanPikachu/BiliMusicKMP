@@ -1,10 +1,12 @@
 package com.zuoguan.bilimusickmp.ui
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -25,7 +27,9 @@ import org.koin.compose.koinInject
 
 @Composable
 fun SettingsPage(
-    viewModel: SettingsPageViewModel = koinInject()
+    modifier: Modifier = Modifier,
+    viewModel: SettingsPageViewModel = koinInject(),
+    contentPadding: PaddingValues = PaddingValues()
 ) {
     val state by viewModel.uiState.collectAsState()
 
@@ -34,41 +38,49 @@ fun SettingsPage(
     var modelName by remember(state) { mutableStateOf(state.llmConfig.modelName) }
 
 
-    SettingsSection(title = "LLM 配置"){
-        Column(modifier = Modifier.padding(16.dp)) {
-            OutlinedTextField(
-                apiKey,
-                onValueChange = { apiKey = it },
-                label = { Text("API Key") },
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(Modifier.height(8.dp))
+    LazyColumn(
+        modifier = modifier,
+        contentPadding = contentPadding
+    ) {
+        item {
+            SettingsSection(title = "LLM 配置") {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    OutlinedTextField(
+                        apiKey,
+                        onValueChange = { apiKey = it },
+                        label = { Text("API Key") },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(Modifier.height(8.dp))
 
-            OutlinedTextField(
-                baseUrl,
-                onValueChange = { baseUrl = it },
-                label = { Text("Base URL") },
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        baseUrl,
+                        onValueChange = { baseUrl = it },
+                        label = { Text("Base URL") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
 
-            OutlinedTextField(
-                modelName,
-                onValueChange = { modelName = it },
-                label = { Text("Model Name") },
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(Modifier.height(16.dp))
+                    OutlinedTextField(
+                        modelName,
+                        onValueChange = { modelName = it },
+                        label = { Text("Model Name") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(16.dp))
 
-            Button(
-                onClick = { viewModel.saveConfig(LLMConfig(apiKey, baseUrl, modelName)) },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("保存")
+                    Button(
+                        onClick = { viewModel.saveConfig(LLMConfig(apiKey, baseUrl, modelName)) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("保存")
+                    }
+                }
             }
         }
     }
-
 }
 
 @Composable

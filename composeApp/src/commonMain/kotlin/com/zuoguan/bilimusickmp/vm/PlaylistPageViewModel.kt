@@ -1,5 +1,6 @@
 package com.zuoguan.bilimusickmp.vm
 
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.SnackbarDuration
 import com.zuoguan.bilimusickmp.models.AudioSource
 import com.zuoguan.bilimusickmp.models.LyricSource
@@ -32,6 +33,7 @@ class PlaylistPageViewModel(
     private val kuGouService: KuGouService
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    val lazyListState = LazyListState()
 
     private val _uiState = MutableStateFlow(PlaylistUiState())
     val uiState: StateFlow<PlaylistUiState> = _uiState

@@ -41,7 +41,7 @@ fun PlaylistPage(
     val snackBarHostState = LocalSnackBarHostState.current
 
     val hapticFeedback = LocalHapticFeedback.current
-    val lazyListState = rememberLazyListState()
+    val lazyListState = viewModel.lazyListState
     val reorderState = rememberReorderableLazyListState(
         lazyListState = lazyListState,
         onMove = { from, to ->

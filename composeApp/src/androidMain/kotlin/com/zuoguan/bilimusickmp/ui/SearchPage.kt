@@ -134,7 +134,8 @@ fun SearchPage(
                     LazyVerticalGrid(
                         modifier = Modifier.fillMaxSize(),
                         columns = GridCells.Adaptive(256.dp),
-                        contentPadding = PaddingValues(bottom = 96.dp)
+                        contentPadding = PaddingValues(bottom = 96.dp),
+                        state = viewModel.lazyGridState
                     ) {
                         items(state.results) { item ->
                             PcSearchResultItem(
@@ -169,7 +170,8 @@ fun SearchPage(
                 } else {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = 96.dp)
+                        contentPadding = PaddingValues(bottom = 96.dp),
+                        state = viewModel.lazyListState
                     ) {
                         items(state.results) { item ->
                             MobileSearchResultItem(

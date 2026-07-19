@@ -25,8 +25,14 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -129,6 +135,7 @@ fun App(
             ) {
                 ContentArea(
                     page = currentPage,
+                    innerPadding = innerPadding,
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -169,9 +176,11 @@ fun BottomNavigationBar(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ContentArea(
     page: Page,
+    innerPadding: PaddingValues,
     modifier: Modifier = Modifier
 ) {
     AnimatedContent(
@@ -222,7 +231,17 @@ fun ContentArea(
             when (currentPage) {
                 Page.PLAYLIST -> PlaylistPage()
                 Page.SEARCH   -> SearchPage()
-                Page.SETTINGS -> SettingsPage()
+                Page.SETTINGS -> {
+                    val isImeVisible = WindowInsets.isImeVisible
+                    val bottomPadding = if (isImeVisible) 0.dp else 96.dp
+                    SettingsPage(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .consumeWindowInsets(innerPadding)
+                            .imePadding(),
+                        contentPadding = PaddingValues(bottom = bottomPadding)
+                    )
+                }
                 Page.LYRICS   -> LyricsPage()
                 Page.SONG_EDIT -> SongEditPage()
             }

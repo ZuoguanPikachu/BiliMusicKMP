@@ -128,9 +128,9 @@ fun SearchPage(
 
             if (!state.isSearchLoading && state.searchError == null) {
                 LazyVerticalGrid(
-                    modifier = Modifier
-                        .fillMaxSize(),
-                    columns = GridCells.Adaptive(312.dp)
+                    modifier = Modifier.fillMaxSize(),
+                    columns = GridCells.Adaptive(312.dp),
+                    state = viewModel.lazyGridState
                 ) {
                     items(state.results) { item ->
                         PcSearchResultItem(
@@ -141,7 +141,6 @@ fun SearchPage(
                     }
                 }
             }
-
         }
     }
 }

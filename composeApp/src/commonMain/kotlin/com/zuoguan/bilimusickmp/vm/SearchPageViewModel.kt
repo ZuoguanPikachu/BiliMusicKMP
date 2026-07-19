@@ -1,5 +1,7 @@
 package com.zuoguan.bilimusickmp.vm
 
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.material3.SnackbarDuration
 import com.zuoguan.bilimusickmp.models.AudioSource
 import com.zuoguan.bilimusickmp.models.CoverSource
@@ -35,6 +37,8 @@ class SearchPageViewModel(
 ) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    val lazyListState = LazyListState()
+    val lazyGridState = LazyGridState()
 
     private val _uiState = MutableStateFlow(SearchUiState())
     val uiState: StateFlow<SearchUiState> = _uiState
