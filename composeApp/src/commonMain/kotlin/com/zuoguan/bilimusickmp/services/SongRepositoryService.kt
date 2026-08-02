@@ -11,11 +11,21 @@ import kotbase.MutableArray
 import kotbase.MutableDocument
 import kotbase.QueryBuilder
 import kotbase.SelectResult
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import java.io.File
+import java.security.MessageDigest
 
-class SongRepositoryService {
+class SongRepositoryService(
+    private val databaseDir: File,
+    private val engine: JsEngineService
+) {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val coll by lazy { DatabaseHelper.songCollection }
 
     private val _songs = MutableStateFlow<List<Song>>(emptyList())
@@ -25,8 +35,56 @@ class SongRepositoryService {
     val allTags: StateFlow<List<String>> = _allTags.asStateFlow()
 
     init {
-        loadSongs()
+        scope.launch {
+            if (engine.isScriptLoaded) {
+                val resp = engine.download("songs-db.md5")
+                if (resp.status == 200) {
+                    val remoteSongsDBMD5 = String(resp.body, Charsets.UTF_8)
+                    val songsDBMD5 = getSongsDBMD5()
+
+                    if (songsDBMD5 != remoteSongsDBMD5) {
+                        downloadDBFiles()
+                    }
+                }
+            }
+
+            loadSongs()
+
+            engine.scriptAddedEvent.collect {
+                val resp = engine.download("songs-db.md5")
+                if (resp.status == 404) {
+                    uploadDBFiles()
+                }
+            }
+        }
     }
+
+    fun getSongsDBMD5(): String {
+        val dbFile = File(databaseDir, "db.sqlite3-wal")
+        val digest = MessageDigest.getInstance("MD5").digest(dbFile.readBytes())
+
+        return digest.joinToString("") { "%02x".format(it) }
+    }
+
+    suspend fun downloadDBFiles() {
+        var resp = engine.download("db.sqlite3")
+        File(databaseDir, "db.sqlite3").writeBytes(resp.body)
+
+        resp = engine.download("db.sqlite3-shm")
+        File(databaseDir, "db.sqlite3-shm").writeBytes(resp.body)
+
+        resp = engine.download("db.sqlite3-wal")
+        File(databaseDir, "db.sqlite3-wal").writeBytes(resp.body)
+    }
+
+    suspend fun uploadDBFiles() {
+        engine.uploadFile("db.sqlite3", File(databaseDir, "db.sqlite3"))
+        engine.uploadFile("db.sqlite3-shm", File(databaseDir, "db.sqlite3-shm"))
+        engine.uploadFile("db.sqlite3-wal", File(databaseDir, "db.sqlite3-wal"))
+
+        engine.uploadString("songs-db.md5", getSongsDBMD5())
+    }
+
 
     fun loadSongs() {
         _songs.value = querySongs()
@@ -36,7 +94,7 @@ class SongRepositoryService {
             .sorted()
     }
 
-    fun saveSong(song: Song, refresh: Boolean = true) {
+    suspend fun saveSong(song: Song, refresh: Boolean = true) {
         val doc = MutableDocument(song.id)
             .apply {
                 setString("cid", song.cid)
@@ -56,6 +114,7 @@ class SongRepositoryService {
         coll.save(doc)
         if (refresh) {
             loadSongs()
+            uploadDBFiles()
         }
     }
 

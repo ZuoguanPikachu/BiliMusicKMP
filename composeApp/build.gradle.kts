@@ -51,6 +51,7 @@ kotlin {
             implementation("dev.kotbase:couchbase-lite:3.2.4-1.2.0")
             implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
             implementation("sh.calvin.reorderable:reorderable:3.1.0")
+            implementation("io.github.dokar3:quickjs-kt:1.0.5")
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
@@ -75,7 +76,7 @@ android {
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = 1
-        versionName = "1.1.3"
+        versionName = "1.2.0"
     }
     packaging {
         resources {
@@ -104,7 +105,7 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "BiliMusic"
-            packageVersion = "1.1.3"
+            packageVersion = "1.2.0"
             windows {
                 iconFile.set(project.file("src/jvmMain/composeResources/drawable/bili_music.ico"))
             }

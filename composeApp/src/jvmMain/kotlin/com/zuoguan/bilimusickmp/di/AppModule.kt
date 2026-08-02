@@ -4,6 +4,7 @@ import com.zuoguan.bilimusickmp.services.AudioPlayService
 import com.zuoguan.bilimusickmp.services.BiliService
 import com.zuoguan.bilimusickmp.services.ExtractSongBaseInfoService
 import com.zuoguan.bilimusickmp.services.FilePreferencesStorageService
+import com.zuoguan.bilimusickmp.services.JsEngineService
 import com.zuoguan.bilimusickmp.services.KuGouService
 import com.zuoguan.bilimusickmp.services.NetEaseService
 import com.zuoguan.bilimusickmp.services.PreferencesStorageService
@@ -24,10 +25,11 @@ val appModule = module {
     single { BiliService() }
     single { NetEaseService() }
     single { KuGouService() }
-    single<PreferencesStorageService> { FilePreferencesStorageService(File(getAppConfigDir(), "llm_config.json")) }
+    single { JsEngineService(File(getAppConfigDir(), "cloud_sync_script.js")) }
+    single<PreferencesStorageService> { FilePreferencesStorageService(File(getAppConfigDir(), "llm_config.json"), get()) }
     single { ExtractSongBaseInfoService(get()) }
     single<AudioPlayService> { VlcAudioPlayService() }
-    single { SongRepositoryService() }
+    single { SongRepositoryService(File(getAppConfigDir(), "songs-db.cblite2"), get() ) }
     single { SongMetadataService(get(), get(), get(), get()) }
 
     single { SearchPageViewModel(get(), get(), get(), get (), get(), get()) }
@@ -36,5 +38,5 @@ val appModule = module {
     }
     single { PlayBarViewModel(get()) }
     single { LyricsPageViewModel(get()) }
-    single { SettingsPageViewModel(get()) }
+    single { SettingsPageViewModel(get(), get()) }
 }

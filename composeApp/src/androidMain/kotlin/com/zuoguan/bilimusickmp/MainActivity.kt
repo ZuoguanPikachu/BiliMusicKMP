@@ -67,7 +67,6 @@ import com.zuoguan.bilimusickmp.ui.SettingsPage
 import com.zuoguan.bilimusickmp.ui.SongEditPage
 import org.koin.compose.koinInject
 
-
 class MainActivity : ComponentActivity() {
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {

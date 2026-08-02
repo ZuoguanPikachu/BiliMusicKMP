@@ -5,6 +5,7 @@ import com.zuoguan.bilimusickmp.services.AudioPlayService
 import com.zuoguan.bilimusickmp.services.BiliService
 import com.zuoguan.bilimusickmp.services.ExoAudioPlayService
 import com.zuoguan.bilimusickmp.services.ExtractSongBaseInfoService
+import com.zuoguan.bilimusickmp.services.JsEngineService
 import com.zuoguan.bilimusickmp.services.KuGouService
 import com.zuoguan.bilimusickmp.services.NavigationService
 import com.zuoguan.bilimusickmp.services.NetEaseService
@@ -20,14 +21,16 @@ import com.zuoguan.bilimusickmp.vm.SettingsPageViewModel
 import com.zuoguan.bilimusickmp.vm.SongEditPageViewModel
 import org.koin.android.ext.koin.androidContext
 import org.koin.dsl.module
+import java.io.File
 
 val appModule = module {
     single { BiliService() }
     single { NetEaseService() }
     single { KuGouService() }
-    single<PreferencesStorageService> { AndroidPreferencesStorageService(androidContext()) }
+    single { JsEngineService(File(androidContext().filesDir, "cloud_sync_script.js")) }
+    single<PreferencesStorageService> { AndroidPreferencesStorageService(androidContext(), get()) }
     single { ExtractSongBaseInfoService(get()) }
-    single { SongRepositoryService() }
+    single { SongRepositoryService(File(androidContext().filesDir, "songs-db.cblite2"), get()) }
 
     single<AudioPlayService> {
         ExoAudioPlayService(androidContext())
@@ -40,7 +43,7 @@ val appModule = module {
     single { SongEditPageViewModel(get(), get(), get()) }
     single { PlaylistPageViewModel(get(), get(), get(), get(), get()) }
     single { SearchPageViewModel(get(), get(), get(), get(), get(), get()) }
-    single { SettingsPageViewModel(get()) }
+    single { SettingsPageViewModel(get(), get()) }
     single { PlayBarViewModel(get()) }
     single { LyricsPageViewModel(get()) }
 }

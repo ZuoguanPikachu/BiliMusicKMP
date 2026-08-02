@@ -1,6 +1,7 @@
 package com.zuoguan.bilimusickmp.vm
 
 import com.zuoguan.bilimusickmp.models.LLMConfig
+import com.zuoguan.bilimusickmp.services.JsEngineService
 import com.zuoguan.bilimusickmp.services.PreferencesStorageService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -12,6 +13,7 @@ import kotlinx.coroutines.launch
 
 class SettingsPageViewModel(
     private val preferencesStorageService: PreferencesStorageService,
+    private val jsEngineService: JsEngineService
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -28,6 +30,11 @@ class SettingsPageViewModel(
                 _uiState.update { it.copy(llmConfig = config) }
             }
         }
+        scope.launch {
+            jsEngineService.getScript().collect { script ->
+                _uiState.update { it.copy(script = script) }
+            }
+        }
     }
 
     fun saveConfig(config: LLMConfig) {
@@ -35,9 +42,16 @@ class SettingsPageViewModel(
             preferencesStorageService.saveLLMConfig(config)
         }
     }
+
+    fun saveScript(script: String) {
+        scope.launch {
+            jsEngineService.saveScript(script)
+        }
+    }
 }
 
 
 data class SettingsUiState(
-    val llmConfig: LLMConfig = LLMConfig()
+    val llmConfig: LLMConfig = LLMConfig(),
+    val script: String = ""
 )
