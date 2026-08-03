@@ -118,12 +118,13 @@ class SongRepositoryService(
         }
     }
 
-    fun removeSong(id: String) {
+    suspend fun removeSong(id: String) {
         val doc = coll.getDocument(id)
         doc?.let {
             coll.delete(it)
         }
         loadSongs()
+        uploadDBFiles()
     }
 
     private fun querySongs(): List<Song> {
