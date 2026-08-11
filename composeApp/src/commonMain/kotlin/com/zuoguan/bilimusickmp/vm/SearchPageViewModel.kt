@@ -219,6 +219,7 @@ class SearchPageViewModel(
     fun confirmAdd(song: Song) {
         scope.launch {
             songRepository.saveSong(song)
+            songRepository.uploadDBFiles()
         }
     }
 

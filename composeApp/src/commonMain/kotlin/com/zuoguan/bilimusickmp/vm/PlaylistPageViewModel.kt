@@ -116,6 +116,7 @@ class PlaylistPageViewModel(
                 songRepository.saveSong(song, refresh = false)
             }
             songRepository.loadSongs()
+            songRepository.uploadDBFiles()
         }
     }
 
@@ -278,6 +279,7 @@ class PlaylistPageViewModel(
     fun confirmEdit(song: Song) {
         scope.launch {
             songRepository.saveSong(song)
+            songRepository.uploadDBFiles()
         }
     }
 

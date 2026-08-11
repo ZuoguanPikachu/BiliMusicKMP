@@ -78,11 +78,13 @@ class SongRepositoryService(
     }
 
     suspend fun uploadDBFiles() {
-        engine.uploadFile("db.sqlite3", File(databaseDir, "db.sqlite3"))
-        engine.uploadFile("db.sqlite3-shm", File(databaseDir, "db.sqlite3-shm"))
-        engine.uploadFile("db.sqlite3-wal", File(databaseDir, "db.sqlite3-wal"))
+        if (engine.isScriptLoaded) {
+            engine.uploadFile("db.sqlite3", File(databaseDir, "db.sqlite3"))
+            engine.uploadFile("db.sqlite3-shm", File(databaseDir, "db.sqlite3-shm"))
+            engine.uploadFile("db.sqlite3-wal", File(databaseDir, "db.sqlite3-wal"))
 
-        engine.uploadString("songs-db.md5", getSongsDBMD5())
+            engine.uploadString("songs-db.md5", getSongsDBMD5())
+        }
     }
 
 
@@ -94,7 +96,7 @@ class SongRepositoryService(
             .sorted()
     }
 
-    suspend fun saveSong(song: Song, refresh: Boolean = true) {
+    fun saveSong(song: Song, refresh: Boolean = true) {
         val doc = MutableDocument(song.id)
             .apply {
                 setString("cid", song.cid)
@@ -114,7 +116,6 @@ class SongRepositoryService(
         coll.save(doc)
         if (refresh) {
             loadSongs()
-            uploadDBFiles()
         }
     }
 
