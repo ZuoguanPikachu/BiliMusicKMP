@@ -13,6 +13,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoFixNormal
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -78,7 +79,6 @@ fun SongEditPage(
         var author by remember(song) { mutableStateOf(song.author) }
         var lyricSource by remember(song) { mutableStateOf(song.lyricSource) }
         var lyricId by remember(song) { mutableStateOf(song.lyricId) }
-        var lyricBiasText by remember(song) { mutableStateOf(song.lyricBias.toString()) }
         var coverSource by remember(song) { mutableStateOf(song.coverSource) }
         var coverId by remember(song) { mutableStateOf(song.coverId) }
         var pic by remember(song) { mutableStateOf(song.pic) }
@@ -92,7 +92,7 @@ fun SongEditPage(
             }
         }
 
-        suspend fun resolveCoverId() {
+        suspend fun resolveCover() {
             if(title.isNotEmpty() && author.isNotEmpty()){
                 coverId = songMetadataService.resolveSongId(coverSource, title, author)
                 if (coverId.isNotEmpty()){
@@ -120,7 +120,17 @@ fun SongEditPage(
                     onValueChange = { title = it },
                     label = { Text("标题") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    trailingIcon = {
+                        IconButton(
+                            modifier = Modifier.pointerHoverIcon(PointerIcon.Default),
+                            onClick = {
+                                title = ""
+                            }
+                        ) {
+                            Icon(Icons.Default.Clear, contentDescription = null)
+                        }
+                    }
                 )
             }
             item {
@@ -129,7 +139,17 @@ fun SongEditPage(
                     onValueChange = { author = it },
                     label = { Text("作者") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    trailingIcon = {
+                        IconButton(
+                            modifier = Modifier.pointerHoverIcon(PointerIcon.Default),
+                            onClick = {
+                                author = ""
+                            }
+                        ) {
+                            Icon(Icons.Default.Clear, contentDescription = null)
+                        }
+                    }
                 )
             }
 
@@ -139,6 +159,7 @@ fun SongEditPage(
             item{
                 MetadataSourceDropdown(LyricSource.entries, lyricSource, {
                     lyricSource = it as LyricSource
+                    scope.launch { resolveLyricId() }
                 })
             }
             item {
@@ -152,26 +173,12 @@ fun SongEditPage(
                         IconButton(
                             modifier = Modifier.pointerHoverIcon(PointerIcon.Default),
                             onClick = {
-                                scope.launch { resolveLyricId() }
+                                lyricId = ""
                             }
                         ) {
-                            Icon(Icons.Default.AutoFixNormal, contentDescription = "自动获取歌词ID")
+                            Icon(Icons.Default.Clear, contentDescription = null)
                         }
                     }
-                )
-            }
-            item {
-                OutlinedTextField(
-                    value = lyricBiasText,
-                    onValueChange = { input ->
-                        if (input.isEmpty() || Regex("^-?\\d*$").matches(input)) {
-                            lyricBiasText = input
-                        }
-                    },
-                    label = { Text("歌词延时(ms)") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
                 )
             }
 
@@ -181,6 +188,7 @@ fun SongEditPage(
             item {
                 MetadataSourceDropdown(CoverSource.entries,  coverSource, {
                     coverSource = it as CoverSource
+                    scope.launch { resolveCover() }
                 })
             }
             if (coverSource != CoverSource.BILI_BILI){
@@ -195,10 +203,10 @@ fun SongEditPage(
                             IconButton(
                                 modifier = Modifier.pointerHoverIcon(PointerIcon.Default),
                                 onClick = {
-                                    scope.launch { resolveCoverId() }
+                                    coverId = ""
                                 }
                             ) {
-                                Icon(Icons.Default.AutoFixNormal, contentDescription = "自动获取封面ID")
+                                Icon(Icons.Default.Clear, contentDescription = null)
                             }
                         }
                     )
@@ -216,10 +224,10 @@ fun SongEditPage(
                             IconButton(
                                 modifier = Modifier.pointerHoverIcon(PointerIcon.Default),
                                 onClick = {
-                                    scope.launch { resolvePicFromCoverId() }
+                                    coverId = ""
                                 }
                             ) {
-                                Icon(Icons.Default.AutoFixNormal, contentDescription = "根据封面ID获取URL")
+                                Icon(Icons.Default.Clear, contentDescription = null)
                             }
                         }
                     }
@@ -262,7 +270,6 @@ fun SongEditPage(
                                 this.author = author
                                 this.lyricSource = lyricSource
                                 this.lyricId = lyricId
-                                lyricBias = lyricBiasText.toIntOrNull() ?: 0
                                 this.coverSource = coverSource
                                 this.coverId = coverId
                                 this.pic = pic
