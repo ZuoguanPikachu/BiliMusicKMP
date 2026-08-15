@@ -96,7 +96,7 @@ class SongRepositoryService(
             .sorted()
     }
 
-    fun saveSong(song: Song, refresh: Boolean = true) {
+    suspend fun saveSong(song: Song, refresh: Boolean = true, upload: Boolean = true) {
         val doc = MutableDocument(song.id)
             .apply {
                 setString("cid", song.cid)
@@ -117,6 +117,9 @@ class SongRepositoryService(
         if (refresh) {
             loadSongs()
         }
+        if (upload) {
+            uploadDBFiles()
+        }
     }
 
     suspend fun removeSong(id: String) {
@@ -126,6 +129,39 @@ class SongRepositoryService(
         }
         loadSongs()
         uploadDBFiles()
+    }
+
+    fun getSongById(id: String): Song? {
+        val doc = coll.getDocument(id)
+        if (doc != null) {
+            val song = Song().apply {
+                this.id = id
+                cid = doc.getString("cid") ?: ""
+                audioSource = doc.getString("audioSource")
+                    ?.let { runCatching { AudioSource.valueOf(it) }.getOrNull() }
+                    ?: AudioSource.BILI_BILI
+                title = doc.getString("title") ?: ""
+                author = doc.getString("author") ?: ""
+                tags = doc.getArray("tags")
+                    ?.toList()
+                    ?.mapNotNull { it.toString() }
+                    ?: emptyList()
+                lyricSource = doc.getString("lyricSource")
+                    ?.let { runCatching { LyricSource.valueOf(it) }.getOrNull() }
+                    ?: LyricSource.NONE
+                lyricId = doc.getString("lyricId") ?: ""
+                lyricBias = doc.getInt("lyricBias")
+                coverSource = doc.getString("coverSource")
+                    ?.let { runCatching { CoverSource.valueOf(it) }.getOrNull() }
+                    ?: CoverSource.NONE
+                coverId = doc.getString("coverId") ?: ""
+                pic = doc.getString("pic") ?: ""
+                ts = doc.getLong("ts")
+            }
+            return song
+        } else {
+            return null
+        }
     }
 
     private fun querySongs(): List<Song> {

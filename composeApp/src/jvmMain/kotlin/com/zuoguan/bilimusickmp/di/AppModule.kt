@@ -37,6 +37,6 @@ val appModule = module {
         PlaylistPageViewModel(get(), get(), get(), get (), get())
     }
     single { PlayBarViewModel(get()) }
-    single { LyricsPageViewModel(get()) }
+    single { LyricsPageViewModel(get(), get()) }
     single { SettingsPageViewModel(get(), get()) }
 }

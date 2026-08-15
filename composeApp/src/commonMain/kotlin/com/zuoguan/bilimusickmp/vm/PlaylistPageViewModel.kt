@@ -113,7 +113,7 @@ class PlaylistPageViewModel(
         scope.launch {
             songs.forEachIndexed { index, song ->
                 song.ts = tsList[index]
-                songRepository.saveSong(song, refresh = false)
+                songRepository.saveSong(song, refresh = false, upload = false)
             }
             songRepository.loadSongs()
             songRepository.uploadDBFiles()
@@ -279,7 +279,6 @@ class PlaylistPageViewModel(
     fun confirmEdit(song: Song) {
         scope.launch {
             songRepository.saveSong(song)
-            songRepository.uploadDBFiles()
         }
     }
 

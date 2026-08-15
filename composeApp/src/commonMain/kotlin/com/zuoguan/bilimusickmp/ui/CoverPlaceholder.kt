@@ -12,21 +12,24 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun CoverPlaceholder() {
+fun CoverPlaceholder(size: Dp = 48.dp, radius: Dp = 6.dp) {
     Box(
         modifier = Modifier
-            .size(48.dp)
-            .clip(RoundedCornerShape(6.dp))
+            .size(size)
+            .clip(RoundedCornerShape(radius))
             .background(MaterialTheme.colorScheme.surfaceVariant),
         contentAlignment = Alignment.Center
     ) {
         Icon(
             imageVector = Icons.Default.MusicNote,
             contentDescription = "No Cover",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(size / 2)
         )
     }
 }

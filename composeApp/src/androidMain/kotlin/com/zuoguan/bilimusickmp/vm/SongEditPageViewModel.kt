@@ -59,7 +59,6 @@ class SongEditPageViewModel(
     fun save(song: Song) {
         scope.launch {
             songRepository.saveSong(song)
-            songRepository.uploadDBFiles()
         }
     }
 }
