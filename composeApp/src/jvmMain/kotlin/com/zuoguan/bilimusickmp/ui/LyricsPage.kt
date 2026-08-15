@@ -119,7 +119,7 @@ fun LyricsPage(viewModel: LyricsPageViewModel = koinInject()) {
                     LyricLineItem(
                         text = line.text,
                         isCurrent = index == currentIndex,
-                        onClick = { viewModel.seekTo(line.timeMs - bias) }
+                        onClick = { viewModel.seekTo(line.timeMs + bias) }
                     )
                 }
             }

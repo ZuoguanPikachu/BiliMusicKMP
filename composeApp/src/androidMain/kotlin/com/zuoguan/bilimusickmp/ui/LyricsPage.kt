@@ -128,7 +128,7 @@ fun LyricsPage(
                 LyricLineItem(
                     text = line.text,
                     isCurrent = index == currentIndex,
-                    onClick = { viewModel.seekTo(line.timeMs) }
+                    onClick = { viewModel.seekTo(line.timeMs + bias) }
                 )
             }
         }
