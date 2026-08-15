@@ -284,7 +284,15 @@ fun ToolBar(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             if (expanded) {
-                TagFilterModeChips(mode, onModeChange)
+                TextButton(
+                    onClick = { expanded = !expanded },
+                ){
+                    Text("收起")
+                    Icon(
+                        imageVector = Icons.Default.ArrowDropUp,
+                        contentDescription = "收起"
+                    )
+                }
             }
 
             AnimatedVisibility(
@@ -308,15 +316,7 @@ fun ToolBar(
                 enter = slideInHorizontally() + fadeIn(),
                 exit = slideOutHorizontally() + fadeOut()
             ){
-                TextButton(
-                    onClick = { expanded = !expanded },
-                ){
-                    Text("收起")
-                    Icon(
-                        imageVector = Icons.Default.ArrowDropUp,
-                        contentDescription = "收起"
-                    )
-                }
+                TagFilterModeChips(mode, onModeChange)
             }
 
             if (!expanded){
