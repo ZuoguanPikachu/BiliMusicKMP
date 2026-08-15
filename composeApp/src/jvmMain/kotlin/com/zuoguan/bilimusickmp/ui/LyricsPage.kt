@@ -151,13 +151,17 @@ fun LyricsPage(viewModel: LyricsPageViewModel = koinInject()) {
                         }
                     }
 
-                    IconButton(
-                        modifier = Modifier.align(Alignment.CenterEnd).padding(horizontal = 16.dp),
-                        onClick = {
-                            viewModel.loadLyrics(currentTrack)
-                        }
+                    Row(
+                        modifier = Modifier.align(Alignment.CenterEnd).padding(horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ){
-                        Icon(Icons.Default.Refresh, contentDescription = "刷新歌词")
+                        IconButton(
+                            onClick = {
+                                viewModel.loadLyrics(currentTrack)
+                            }
+                        ){
+                            Icon(Icons.Default.Refresh, contentDescription = "刷新歌词")
+                        }
                     }
                 }
             }

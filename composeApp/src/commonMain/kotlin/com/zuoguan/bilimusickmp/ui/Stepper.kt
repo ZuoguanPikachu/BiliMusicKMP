@@ -57,7 +57,7 @@ fun Stepper(
             )
         }
 
-        Text(text = textValue, modifier = Modifier.width(80.dp), textAlign = TextAlign.Center)
+        Text(text = textValue, modifier = Modifier.width(60.dp), textAlign = TextAlign.Center)
 
         IconButton(
             enabled = enabled,
