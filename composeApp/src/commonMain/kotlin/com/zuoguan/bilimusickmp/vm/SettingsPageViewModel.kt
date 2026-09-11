@@ -1,8 +1,12 @@
 package com.zuoguan.bilimusickmp.vm
 
 import com.zuoguan.bilimusickmp.models.LLMConfig
+import com.zuoguan.bilimusickmp.services.CloudSyncService
 import com.zuoguan.bilimusickmp.services.JsEngineService
 import com.zuoguan.bilimusickmp.services.PreferencesStorageService
+import com.zuoguan.bilimusickmp.services.SyncUiState
+import com.zuoguan.bilimusickmp.services.getLLMConfig
+import com.zuoguan.bilimusickmp.services.saveLLMConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -13,7 +17,8 @@ import kotlinx.coroutines.launch
 
 class SettingsPageViewModel(
     private val preferencesStorageService: PreferencesStorageService,
-    private val jsEngineService: JsEngineService
+    private val jsEngineService: JsEngineService,
+    private val cloudSyncService: CloudSyncService
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -35,6 +40,11 @@ class SettingsPageViewModel(
                 _uiState.update { it.copy(script = script) }
             }
         }
+        scope.launch {
+            cloudSyncService.status.collect { status ->
+                _uiState.update { it.copy(syncStatus = status) }
+            }
+        }
     }
 
     fun saveConfig(config: LLMConfig) {
@@ -48,10 +58,17 @@ class SettingsPageViewModel(
             jsEngineService.saveScript(script)
         }
     }
+
+    fun syncNow() {
+        scope.launch {
+            cloudSyncService.syncNow()
+        }
+    }
 }
 
 
 data class SettingsUiState(
     val llmConfig: LLMConfig = LLMConfig(),
-    val script: String = ""
+    val script: String = "",
+    val syncStatus: SyncUiState = SyncUiState()
 )

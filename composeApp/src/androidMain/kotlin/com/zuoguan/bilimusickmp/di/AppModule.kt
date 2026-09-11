@@ -1,11 +1,12 @@
 package com.zuoguan.bilimusickmp.di
 
-import com.zuoguan.bilimusickmp.services.AndroidPreferencesStorageService
 import com.zuoguan.bilimusickmp.services.AudioPlayService
 import com.zuoguan.bilimusickmp.services.BiliService
+import com.zuoguan.bilimusickmp.services.CloudSyncService
 import com.zuoguan.bilimusickmp.services.ExoAudioPlayService
 import com.zuoguan.bilimusickmp.services.ExtractSongBaseInfoService
 import com.zuoguan.bilimusickmp.services.JsEngineService
+import com.zuoguan.bilimusickmp.services.JsonPreferencesStorageService
 import com.zuoguan.bilimusickmp.services.KuGouService
 import com.zuoguan.bilimusickmp.services.NavigationService
 import com.zuoguan.bilimusickmp.services.NetEaseService
@@ -13,6 +14,7 @@ import com.zuoguan.bilimusickmp.services.PreferencesStorageService
 import com.zuoguan.bilimusickmp.services.SongEditService
 import com.zuoguan.bilimusickmp.services.SongMetadataService
 import com.zuoguan.bilimusickmp.services.SongRepositoryService
+import com.zuoguan.bilimusickmp.utils.migrateLegacyAndroidPreferences
 import com.zuoguan.bilimusickmp.vm.LyricsPageViewModel
 import com.zuoguan.bilimusickmp.vm.PlayBarViewModel
 import com.zuoguan.bilimusickmp.vm.PlaylistPageViewModel
@@ -28,9 +30,12 @@ val appModule = module {
     single { NetEaseService() }
     single { KuGouService() }
     single { JsEngineService(File(androidContext().filesDir, "cloud_sync_script.js")) }
-    single<PreferencesStorageService> { AndroidPreferencesStorageService(androidContext(), get()) }
+    single<PreferencesStorageService> {
+        migrateLegacyAndroidPreferences(androidContext())
+        JsonPreferencesStorageService(File(androidContext().filesDir, "preferences.json").absolutePath)
+    }
     single { ExtractSongBaseInfoService(get()) }
-    single { SongRepositoryService(File(androidContext().filesDir, "songs-db.cblite2"), get()) }
+    single { SongRepositoryService() }
 
     single<AudioPlayService> {
         ExoAudioPlayService(androidContext())
@@ -39,11 +44,12 @@ val appModule = module {
     single { NavigationService() }
     single { SongEditService() }
     single { SongMetadataService(get(), get(), get(), get()) }
+    single(createdAtStart = true) { CloudSyncService(get(), get(), get()) }
 
     single { SongEditPageViewModel(get(), get(), get()) }
     single { PlaylistPageViewModel(get(), get(), get(), get(), get()) }
     single { SearchPageViewModel(get(), get(), get(), get(), get(), get()) }
-    single { SettingsPageViewModel(get(), get()) }
+    single { SettingsPageViewModel(get(), get(), get()) }
     single { PlayBarViewModel(get()) }
     single { LyricsPageViewModel(get(), get()) }
 }

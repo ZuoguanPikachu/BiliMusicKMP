@@ -108,15 +108,9 @@ class PlaylistPageViewModel(
 
     private fun persistOrder() {
         val songs = _uiState.value.filteredSongs
-        val tsList = songs.map{ it.ts }.sorted()
 
         scope.launch {
-            songs.forEachIndexed { index, song ->
-                song.ts = tsList[index]
-                songRepository.saveSong(song, refresh = false, upload = false)
-            }
-            songRepository.loadSongs()
-            songRepository.uploadDBFiles()
+            songRepository.persistOrder(songs)
         }
     }
 

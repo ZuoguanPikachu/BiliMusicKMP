@@ -208,9 +208,14 @@ class JsEngineService(
     }
 
     suspend fun uploadString(key: String, content: String): HttpResponse {
+        return uploadJson(key, content)
+    }
+
+    /** 上传 JSON/文本：内容经 JS 字符串转义后交给用户脚本的 upload(key, bytes)。 */
+    suspend fun uploadJson(key: String, content: String): HttpResponse {
         val resp = engine.evaluate<JsObject>(
             """
-                await upload("$key", str.encode("$content"))
+                await upload("${jsEscape(key)}", str.encode("${jsEscape(content)}"))
             """.trimIndent()
         )
 
@@ -219,6 +224,16 @@ class JsEngineService(
             resp["body"] as ByteArray,
             resp["headers"] as Map<String,String>
         )
+    }
+
+    /** 下载并解码为 UTF-8 文本；对象不存在（404）返回 null，其它错误抛异常。 */
+    suspend fun downloadText(key: String): String? {
+        val resp = download(key)
+        return when (resp.status) {
+            200 -> String(resp.body, Charsets.UTF_8)
+            404 -> null
+            else -> throw IllegalStateException("下载 $key 失败：HTTP ${resp.status}")
+        }
     }
 
     suspend fun download(key: String): HttpResponse {
@@ -370,4 +385,19 @@ private fun hmac(algorithm: String, key: String, data: String): String {
         "%02x".format(it)
     }
 
+}
+
+/** 转义字符串，使其可作为 JS 双引号字符串字面量嵌入 evaluate 代码。 */
+private fun jsEscape(value: String): String = buildString {
+    for (c in value) {
+        when (c) {
+            '\\' -> append("\\\\")
+            '"' -> append("\\\"")
+            '\n' -> append("\\n")
+            '\r' -> append("\\r")
+            '\t' -> append("\\t")
+            '\u0000' -> append("\\u0000")
+            else -> append(c)
+        }
+    }
 }
