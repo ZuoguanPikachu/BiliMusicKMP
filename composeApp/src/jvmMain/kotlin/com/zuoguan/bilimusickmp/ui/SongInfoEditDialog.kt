@@ -177,44 +177,59 @@ fun SongInfoEditDialog(
                         coverSource = it as CoverSource?
                         scope.launch { resolveCover() }
                     })
-                    if (coverSource != CoverSource.BILI_BILI){
-                        OutlinedTextField(
-                            value = coverId,
-                            onValueChange = { coverId = it },
-                            label = { Text("封面ID") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth(),
-                            trailingIcon = {
-                                IconButton(
-                                    modifier = Modifier.pointerHoverIcon(PointerIcon.Default),
-                                    onClick = {
-                                        coverId = ""
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            if (coverSource != CoverSource.BILI_BILI){
+                                OutlinedTextField(
+                                    value = coverId,
+                                    onValueChange = { coverId = it },
+                                    label = { Text("封面ID") },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    trailingIcon = {
+                                        IconButton(
+                                            modifier = Modifier.pointerHoverIcon(PointerIcon.Default),
+                                            onClick = {
+                                                coverId = ""
+                                            }
+                                        ) {
+                                            Icon(Icons.Default.Clear, contentDescription = null)
+                                        }
                                     }
-                                ) {
-                                    Icon(Icons.Default.Clear, contentDescription = null)
-                                }
+                                )
                             }
+                            OutlinedTextField(
+                                value = pic,
+                                onValueChange = { pic = it },
+                                label = { Text("封面URL") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                                trailingIcon = {
+                                    if (coverSource != CoverSource.BILI_BILI){
+                                        IconButton(
+                                            modifier = Modifier.pointerHoverIcon(PointerIcon.Default),
+                                            onClick = {
+                                                coverId = ""
+                                            }
+                                        ) {
+                                            Icon(Icons.Default.Clear, contentDescription = null)
+                                        }
+                                    }
+                                }
+                            )
+                        }
+                        CoverPreviewBox(
+                            pic = pic,
+                            title = title
                         )
                     }
-                    OutlinedTextField(
-                        value = pic,
-                        onValueChange = { pic = it },
-                        label = { Text("封面URL") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        trailingIcon = {
-                            if (coverSource != CoverSource.BILI_BILI){
-                                IconButton(
-                                    modifier = Modifier.pointerHoverIcon(PointerIcon.Default),
-                                    onClick = {
-                                        coverId = ""
-                                    }
-                                ) {
-                                    Icon(Icons.Default.Clear, contentDescription = null)
-                                }
-                            }
-                        }
-                    )
 
                     Text("TAG", style = MaterialTheme.typography.titleMedium)
                     TagsEditor(
