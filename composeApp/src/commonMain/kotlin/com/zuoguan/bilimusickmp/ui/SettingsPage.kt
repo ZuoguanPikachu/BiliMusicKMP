@@ -133,32 +133,23 @@ fun SettingsPage(
                         textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace),
                         maxLines = 8,
                     )
-                }
 
-                Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(16.dp))
 
-                Button(
-                    onClick = { viewModel.saveScript(script) },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("保存")
-                }
+                    Button(
+                        onClick = { viewModel.saveScript(script) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("保存")
+                    }
 
-                Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(16.dp))
 
-                Text(
-                    text = "同步状态：${state.syncStatus.label}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Spacer(Modifier.height(8.dp))
-
-                Button(
-                    onClick = { viewModel.syncNow() },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("立即同步")
+                    Text(
+                        text = "同步状态：${state.syncStatus.label}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }

@@ -58,12 +58,6 @@ class SettingsPageViewModel(
             jsEngineService.saveScript(script)
         }
     }
-
-    fun syncNow() {
-        scope.launch {
-            cloudSyncService.syncNow()
-        }
-    }
 }
 
 
