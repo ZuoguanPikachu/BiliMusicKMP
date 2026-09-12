@@ -29,16 +29,12 @@ import io.kamel.image.asyncPainterResource
  * 歌词页：左侧封面与曲目信息，右侧歌词列表。
  *
  * 高亮行由播放进度与歌词延时（bias）推导，列表随后自动滚动到该行；
- * 点击某行可跳转到对应时间，延时改动需点保存才写回曲目。
  */
 @Composable
 fun LyricsPage(viewModel: LyricsPageViewModel = koinInject()) {
     val uiState by viewModel.uiState.collectAsState()
     val currentTrack = uiState.currentTrack
-    // 歌词延时（毫秒）：换曲目时重置为该曲目已保存的值，所以用 currentTrack 作 key
-    var bias by remember(currentTrack) {
-        mutableStateOf(currentTrack?.lyricBias ?: 0)
-    }
+    val bias = uiState.lyricBias
     val listState = rememberLazyListState()
     val currentIndex = remember(uiState.currentPositionMs, uiState.lyrics, bias) {
         uiState.lyrics.indexOfLast { it.timeMs + bias <= uiState.currentPositionMs }
@@ -135,11 +131,6 @@ fun LyricsPage(viewModel: LyricsPageViewModel = koinInject()) {
             }
 
             if (currentTrack != null) {
-                // 改过延时才点亮保存按钮，保存后重新置灰
-                var saveable by remember(currentTrack) {
-                    mutableStateOf(false)
-                }
-
                 Box(
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -150,14 +141,14 @@ fun LyricsPage(viewModel: LyricsPageViewModel = koinInject()) {
                         IconButton(onClick = {}, enabled = false){
                             Icon(Icons.Default.Timer, contentDescription = "歌词延时")
                         }
-                        Stepper(value = bias, step = 100, onValueChange = {
-                            bias = it
-                            saveable = true
-                        })
+                        Stepper(
+                            value = bias,
+                            step = 100,
+                            onValueChange = viewModel::updateLyricBias
+                        )
                         IconButton(onClick = {
-                            viewModel.saveLyricBias(currentTrack.id, bias)
-                            saveable = false
-                        }, enabled = saveable){
+                            viewModel.saveLyricBias()
+                        }, enabled = uiState.isLyricBiasDirty){
                             Icon(Icons.Default.Check, contentDescription = "保存")
                         }
                     }

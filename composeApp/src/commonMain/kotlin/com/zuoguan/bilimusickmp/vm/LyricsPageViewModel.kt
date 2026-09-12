@@ -39,7 +39,6 @@ class LyricsPageViewModel(
         scope.launch {
             audioPlayService.currentTrack
                 .filterNotNull()
-                // 只按 id 去重：同一首歌被重新构造成 TrackInfo 时不必重复拉歌词
                 .distinctUntilChangedBy { track -> track.id }
                 .collect { track ->
                     loadLyricsInternal(track)
@@ -57,21 +56,39 @@ class LyricsPageViewModel(
                 _uiState.update { it.copy(isPlaying = state == PlaybackState.Playing) }
             }
         }
+
+        scope.launch {
+            songRepositoryService.songs.collect { songs ->
+                val trackId = _uiState.value.currentTrack?.id ?: return@collect
+                val saved = songs.firstOrNull { song -> song.id == trackId }?.lyricBias
+                    ?: return@collect
+                _uiState.update { state ->
+                    if (state.savedLyricBias == saved) state else state.copy(savedLyricBias = saved)
+                }
+            }
+        }
     }
 
     private suspend fun loadLyricsInternal(track: TrackInfo) {
+        val savedBias = songRepositoryService.getSongById(track.id)?.lyricBias ?: track.lyricBias
+
         _uiState.update { it.copy(lyrics = emptyList()) }
 
         val lyrics = runCatching{
             track.lyricsProvider()
         }.getOrElse { emptyList() }
 
-        _uiState.update {
-            if (lyrics.isEmpty()) {
-                it.copy(lyrics = listOf(LyricLine(0L, "暂无歌词")), currentTrack = track)
-            } else {
-                it.copy(lyrics = lyrics.sortedBy { line -> line.timeMs }, currentTrack = track)
-            }
+        _uiState.update { state ->
+            state.copy(
+                lyrics = if (lyrics.isEmpty()) {
+                    listOf(LyricLine(0L, "暂无歌词"))
+                } else {
+                    lyrics.sortedBy { line -> line.timeMs }
+                },
+                currentTrack = track,
+                savedLyricBias = savedBias,
+                lyricBiasDraft = null
+            )
         }
     }
 
@@ -90,14 +107,32 @@ class LyricsPageViewModel(
         }
     }
 
-    /** 持久化歌词时间轴偏移（毫秒），用来手动校准整首歌词。 */
-    fun saveLyricBias(songId: String, bias: Int) {
-        val song = songRepositoryService.getSongById(songId) ?: return
-        // Song 不可变，所以用 copy 生成新实例
-        val updated = song.copy(lyricBias = bias)
+    /** 修改歌词延时草稿（毫秒）；只改内存状态，点保存才写回仓库。 */
+    fun updateLyricBias(bias: Int) {
+        _uiState.update { it.copy(lyricBiasDraft = bias) }
+    }
+
+    /**
+     * 把当前曲目的歌词延时保存到仓库。
+     *
+     * 保存成功后立刻切到「已保存」状态，不等仓库回流，避免保存按钮短暂保持点亮；
+     * 曲目不在仓库里（如直接播放的搜索结果）时无法持久化，草稿保持原样。
+     */
+    fun saveLyricBias() {
+        val state = _uiState.value
+        val songId = state.currentTrack?.id ?: return
+        val bias = state.lyricBias
 
         scope.launch {
+            val song = songRepositoryService.getSongById(songId) ?: return@launch
+            // Song 不可变，所以用 copy 生成新实例
+            val updated = song.copy(lyricBias = bias)
+
             songRepositoryService.saveSong(updated)
+
+            _uiState.update {
+                it.copy(savedLyricBias = bias, lyricBiasDraft = null)
+            }
         }
     }
 
@@ -108,4 +143,17 @@ data class LyricsUiState(
     val lyrics: List<LyricLine> = emptyList(),
     val currentPositionMs: Long = 0L,
     val isPlaying: Boolean = false,
-)
+    /** 仓库里已保存的歌词延时（毫秒）。 */
+    val savedLyricBias: Int = 0,
+    /** 还没保存的歌词延时草稿；null 表示没有改动。 */
+    val lyricBiasDraft: Int? = null,
+) {
+    /** 当前生效的歌词延时：有草稿时按草稿显示，否则用仓库里的值。 */
+    val lyricBias: Int get() = lyricBiasDraft ?: savedLyricBias
+
+    /** 草稿与仓库值不一致时为 true，用来点亮保存按钮。 */
+    val isLyricBiasDirty: Boolean get() {
+        val draft = lyricBiasDraft
+        return draft != null && draft != savedLyricBias
+    }
+}

@@ -39,9 +39,7 @@ fun LyricsPage(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val currentTrack = uiState.currentTrack
-    var bias by remember(currentTrack) {
-        mutableStateOf(currentTrack?.lyricBias ?: 0)
-    }
+    val bias = uiState.lyricBias
     val listState = rememberLazyListState()
     // bias 也参与计算：调整歌词延时后应当立即重新高亮
     val currentIndex = remember(uiState.currentPositionMs, uiState.lyrics, bias) {
@@ -142,10 +140,6 @@ fun LyricsPage(
         }
 
         if (currentTrack != null) {
-            var saveable by remember(currentTrack) {
-                mutableStateOf(false)
-            }
-
             Box(
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -156,14 +150,14 @@ fun LyricsPage(
                     IconButton(onClick = {}, enabled = false){
                         Icon(Icons.Default.Timer, contentDescription = "歌词延时")
                     }
-                    Stepper(value = bias, step = 100, onValueChange = {
-                        bias = it
-                        saveable = true
-                    })
+                    Stepper(
+                        value = bias,
+                        step = 100,
+                        onValueChange = viewModel::updateLyricBias
+                    )
                     IconButton(onClick = {
-                        viewModel.saveLyricBias(currentTrack.id, bias)
-                        saveable = false
-                    }, enabled = saveable){
+                        viewModel.saveLyricBias()
+                    }, enabled = uiState.isLyricBiasDirty){
                         Icon(Icons.Default.Check, contentDescription = "保存")
                     }
                 }
