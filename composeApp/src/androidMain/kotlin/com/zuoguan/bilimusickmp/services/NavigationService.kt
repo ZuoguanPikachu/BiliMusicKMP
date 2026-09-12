@@ -8,9 +8,13 @@ class NavigationService {
     val pageStack: List<Page> get() = _pageStack
 
     val currentPage: Page
-        get() = _pageStack.last()
+        get() = _pageStack.lastOrNull() ?: Page.PLAYLIST
+
+    val canGoBack: Boolean
+        get() = _pageStack.size > 1
 
     fun navigate(page: Page) {
+        if (_pageStack.lastOrNull() == page) return
         _pageStack += page
     }
 

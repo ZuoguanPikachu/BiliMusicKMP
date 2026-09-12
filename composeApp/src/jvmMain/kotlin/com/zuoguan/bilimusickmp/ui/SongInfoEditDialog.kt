@@ -1,93 +1,37 @@
 package com.zuoguan.bilimusickmp.ui
 
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.unit.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.ui.input.pointer.PointerIcon
-import androidx.compose.ui.input.pointer.pointerHoverIcon
-import com.zuoguan.bilimusickmp.models.CoverSource
-import com.zuoguan.bilimusickmp.models.LyricSource
+import androidx.compose.ui.unit.dp
 import com.zuoguan.bilimusickmp.models.Song
-import com.zuoguan.bilimusickmp.services.SongMetadataService
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
-import org.koin.compose.koinInject
+import com.zuoguan.bilimusickmp.vm.SongEditorState
 
+/**
+ * 歌曲编辑对话框（桌面容器）。
+ *
+ * 只负责"对话框"这件事：标题与按钮的摆放。
+ * 表单与 Android 整页共用 [SongEditorForm]，编辑状态来自共用的
+ * [com.zuoguan.bilimusickmp.vm.SongEditorViewModel]。
+ */
 @Composable
 fun SongInfoEditDialog(
-    dialogTitle: String,
-    isLoading: Boolean,
-    allTags: List<String>,
-    song: Song?,
-    onConfirm: (Song) -> Unit,
+    state: SongEditorState,
+    onEdit: (transform: (Song) -> Song) -> Unit,
+    onResolveLyricId: () -> Unit,
+    onResolveCover: () -> Unit,
+    onConfirm: () -> Unit,
     onDismiss: () -> Unit,
-    songMetadataService: SongMetadataService = koinInject()
 ) {
-    var allTags by remember{mutableStateOf(allTags)}
-    var title by remember(song) { mutableStateOf(song?.title.orEmpty()) }
-    var author by remember(song) { mutableStateOf(song?.author.orEmpty()) }
-    var lyricSource by remember(song) { mutableStateOf(song?.lyricSource) }
-    var lyricId by remember(song) { mutableStateOf(song?.lyricId.orEmpty()) }
-    var coverSource by remember(song) { mutableStateOf(song?.coverSource) }
-    var coverId by remember(song) { mutableStateOf(song?.coverId.orEmpty()) }
-    var pic by remember(song) { mutableStateOf(song?.pic.orEmpty()) }
-    var tags by remember(song) { mutableStateOf(song?.tags.orEmpty()) }
-    var newTagText by remember { mutableStateOf("") }
-
-    val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-
-    suspend fun resolveLyricId() {
-        if (title.isNotEmpty() && author.isNotEmpty()){
-            lyricId = songMetadataService.resolveSongId(lyricSource!!, title, author)
-        }
-    }
-
-    suspend fun resolveCover() {
-        if (coverSource != CoverSource.BILI_BILI && title.isNotEmpty() && author.isNotEmpty()) {
-            coverId = songMetadataService.resolveSongId(coverSource!!, title, author)
-            if (coverId.isNotEmpty()){
-                pic = songMetadataService.resolvePic(coverSource!!, coverId)
-            }
-        }
-    }
-
-    fun resolvePicFromCoverId() {
-        if (coverId.isNotEmpty()){
-            pic = songMetadataService.resolvePic(coverSource!!, coverId)
-        }
-    }
-
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
             TextButton(
-                enabled = !isLoading,
-                onClick = {
-                    song?.let {
-                        onConfirm(it.apply {
-                            this.title = title
-                            this.author = author
-                            this.lyricSource = lyricSource!!
-                            this.lyricId = lyricId
-                            this.coverSource = coverSource!!
-                            this.coverId = coverId
-                            this.pic = pic
-                            this.tags = tags.ifEmpty { listOf("Default") }
-                        })
-                    }
-                    onDismiss()
-                }
+                enabled = !state.isLoading && state.draft != null,
+                onClick = onConfirm
             ) {
                 Text("确定")
             }
@@ -95,165 +39,17 @@ fun SongInfoEditDialog(
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("取消") }
         },
-        title = { Text(text = dialogTitle) },
+        title = {
+            Text(text = if (state.isCreating) "添加歌曲" else "编辑歌曲")
+        },
         text = {
-            Column(
-                modifier = Modifier
-                    .padding(16.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                if (isLoading || song == null) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator()
-                    }
-                } else {
-                    OutlinedTextField(
-                        value = title,
-                        onValueChange = { title = it },
-                        label = { Text("标题") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        trailingIcon = {
-                            IconButton(
-                                modifier = Modifier.pointerHoverIcon(PointerIcon.Default),
-                                onClick = {
-                                    title = ""
-                                }
-                            ) {
-                                Icon(Icons.Default.Clear, contentDescription = null)
-                            }
-                        }
-                    )
-
-                    OutlinedTextField(
-                        value = author,
-                        onValueChange = { author = it },
-                        label = { Text("作者") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        trailingIcon = {
-                            IconButton(
-                                modifier = Modifier.pointerHoverIcon(PointerIcon.Default),
-                                onClick = {
-                                    author = ""
-                                }
-                            ) {
-                                Icon(Icons.Default.Clear, contentDescription = null)
-                            }
-                        }
-                    )
-
-                    Text("歌词", style = MaterialTheme.typography.titleMedium)
-                    MetadataSourceDropdown(LyricSource.entries, lyricSource!!, {
-                        lyricSource = it as LyricSource?
-                        scope.launch { resolveLyricId() }
-                    })
-                    OutlinedTextField(
-                        value = lyricId,
-                        onValueChange = { lyricId = it },
-                        label = { Text("歌词ID") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        trailingIcon = {
-                            IconButton(
-                                modifier = Modifier.pointerHoverIcon(PointerIcon.Default),
-                                onClick = {
-                                    lyricId = ""
-                                }
-                            ) {
-                                Icon(Icons.Default.Clear, contentDescription = null)
-                            }
-                        }
-                    )
-
-                    Text("封面", style = MaterialTheme.typography.titleMedium)
-                    MetadataSourceDropdown(CoverSource.entries,  coverSource!!, {
-                        coverSource = it as CoverSource?
-                        scope.launch { resolveCover() }
-                    })
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            if (coverSource != CoverSource.BILI_BILI){
-                                OutlinedTextField(
-                                    value = coverId,
-                                    onValueChange = { coverId = it },
-                                    label = { Text("封面ID") },
-                                    singleLine = true,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    trailingIcon = {
-                                        IconButton(
-                                            modifier = Modifier.pointerHoverIcon(PointerIcon.Default),
-                                            onClick = {
-                                                coverId = ""
-                                            }
-                                        ) {
-                                            Icon(Icons.Default.Clear, contentDescription = null)
-                                        }
-                                    }
-                                )
-                            }
-                            OutlinedTextField(
-                                value = pic,
-                                onValueChange = { pic = it },
-                                label = { Text("封面URL") },
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth(),
-                                trailingIcon = {
-                                    if (coverSource != CoverSource.BILI_BILI){
-                                        IconButton(
-                                            modifier = Modifier.pointerHoverIcon(PointerIcon.Default),
-                                            onClick = {
-                                                coverId = ""
-                                            }
-                                        ) {
-                                            Icon(Icons.Default.Clear, contentDescription = null)
-                                        }
-                                    }
-                                }
-                            )
-                        }
-                        CoverPreviewBox(
-                            pic = pic,
-                            title = title
-                        )
-                    }
-
-                    Text("TAG", style = MaterialTheme.typography.titleMedium)
-                    TagsEditor(
-                        selectedTags = tags,
-                        allTags = allTags,
-                        newTagText = newTagText,
-                        onNewTagTextChange = { newTagText = it },
-                        onAddTag = { tag ->
-                            if (tag !in allTags){
-                                allTags += tag
-                                tags += tag
-                            }
-                            newTagText = ""
-                        },
-                        onToggleTag = { tag ->
-                            if (tag in tags){
-                                tags -= tag
-                            }else{
-                                tags += tag
-                            }
-                        }
-                    )
-                }
-            }
+            SongEditorForm(
+                state = state,
+                onEdit = onEdit,
+                onResolveLyricId = onResolveLyricId,
+                onResolveCover = onResolveCover,
+                modifier = Modifier.heightIn(max = 560.dp)
+            )
         }
     )
 }

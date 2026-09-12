@@ -15,28 +15,35 @@ private val Context.legacyDataStore by preferencesDataStore(name = "settings")
 /**
  * 迁移 v1 Android 的偏好数据（DataStore "settings" → preferences.json）。
  * 仅在 preferences.json 尚不存在时执行一次；迁移后 DataStore 原样保留不再读取。
+ *
+ * 注意：这里会在 Koin 的 single 工厂里同步执行，因此任何异常都被吞掉并打印日志 ——
+ * 迁移失败不应该让整个应用起不来。
  */
 fun migrateLegacyAndroidPreferences(context: Context) {
-    val target = File(context.filesDir, "preferences.json")
-    if (target.exists()) return
+    try {
+        val target = File(context.filesDir, "preferences.json")
+        if (target.exists()) return
 
-    runBlocking {
-        val legacy = context.legacyDataStore.data.first()
-        val apiKey = legacy[stringPreferencesKey("llm_api_key")]
-        val baseUrl = legacy[stringPreferencesKey("llm_base_url")]
-        val modelName = legacy[stringPreferencesKey("llm_model_name")]
-        if (apiKey == null && baseUrl == null && modelName == null) return@runBlocking
+        runBlocking {
+            val legacy = context.legacyDataStore.data.first()
+            val apiKey = legacy[stringPreferencesKey("llm_api_key")]
+            val baseUrl = legacy[stringPreferencesKey("llm_base_url")]
+            val modelName = legacy[stringPreferencesKey("llm_model_name")]
+            if (apiKey == null && baseUrl == null && modelName == null) return@runBlocking
 
-        val content = syncJson.encodeToString(
-            PrefsFileContent(
-                values = buildMap {
-                    if (apiKey != null) put("llm.apiKey", apiKey)
-                    if (baseUrl != null) put("llm.baseUrl", baseUrl)
-                    if (modelName != null) put("llm.modelName", modelName)
-                },
-                syncUpdatedAt = 0L
+            val content = syncJson.encodeToString(
+                PrefsFileContent(
+                    values = buildMap {
+                        if (apiKey != null) put("llm.apiKey", apiKey)
+                        if (baseUrl != null) put("llm.baseUrl", baseUrl)
+                        if (modelName != null) put("llm.modelName", modelName)
+                    },
+                    syncUpdatedAt = 0L
+                )
             )
-        )
-        writeTextFileAtomic(target.absolutePath, content)
+            writeTextFileAtomic(target.absolutePath, content)
+        }
+    } catch (e: Exception) {
+        println("旧版偏好迁移失败，已跳过: ${e.message}")
     }
 }

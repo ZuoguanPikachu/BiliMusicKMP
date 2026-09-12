@@ -3,36 +3,34 @@ package com.zuoguan.bilimusickmp.utils
 import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
+import java.util.concurrent.CopyOnWriteArrayList
 
 class SimpleCookieJar : CookieJar {
 
-    private val cookieStore: MutableMap<String, MutableList<Cookie>> = mutableMapOf()
+    private val cookieStore = CopyOnWriteArrayList<Cookie>()
 
     override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
-        val host = url.host
-        val list = cookieStore.getOrPut(host) { mutableListOf() }
-        cookies.forEach { newCookie ->
-            list.removeAll { it.name == newCookie.name }
-            list.add(newCookie)
+        for (newCookie in cookies) {
+            cookieStore.removeAll { it.name == newCookie.name && it.domain == newCookie.domain }
+            cookieStore.add(newCookie)
         }
     }
 
     override fun loadForRequest(url: HttpUrl): List<Cookie> {
-        val host = url.host
         val now = System.currentTimeMillis()
-        val cookies = cookieStore[host]?.filter { it.expiresAt > now } ?: emptyList()
-        return cookies
+        cookieStore.removeAll { it.expiresAt < now }
+        return cookieStore.filter { it.matches(url) }
     }
 
     fun set(name: String, value: String, domain: String, path: String = "/") {
-        val cookie = Cookie.Builder()
-            .name(name)
-            .value(value)
-            .domain(domain)
-            .path(path)
-            .build()
-        val list = cookieStore.getOrPut(domain) { mutableListOf() }
-        list.removeAll { it.name == name }
-        list.add(cookie)
+        cookieStore.removeAll { it.name == name && it.domain == domain }
+        cookieStore.add(
+            Cookie.Builder()
+                .name(name)
+                .value(value)
+                .domain(domain)
+                .path(path)
+                .build()
+        )
     }
 }

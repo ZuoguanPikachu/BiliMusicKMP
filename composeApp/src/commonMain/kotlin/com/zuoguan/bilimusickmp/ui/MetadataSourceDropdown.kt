@@ -20,13 +20,15 @@ import com.zuoguan.bilimusickmp.models.MetadataSource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MetadataSourceDropdown(
-    sources: List<MetadataSource>,
-    selectedSource: MetadataSource,
-    onSourceChange: (MetadataSource) -> Unit,
+fun <T : MetadataSource> MetadataSourceDropdown(
+    sources: List<T>,
+    selectedSource: T,
+    onSourceChange: (T) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var expanded by remember { mutableStateOf(false) }
+
+    val selectable = sources.filter { !it.isNone || it == selectedSource }
 
     ExposedDropdownMenuBox(
         expanded = expanded,
@@ -55,9 +57,7 @@ fun MetadataSourceDropdown(
                 expanded = false
             }
         ) {
-            sources
-                .filter { !(it == LyricSource.NONE || it == CoverSource.NONE) }
-                .forEach { source ->
+            selectable.forEach { source ->
 
                     DropdownMenuItem(
                         text = {

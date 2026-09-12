@@ -9,10 +9,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
@@ -27,18 +23,12 @@ fun Stepper(
     step: Int = 1,
     enabled: Boolean = true
 ) {
-    var textValue by remember(value) {
-        mutableStateOf(value.toString())
-    }
-
-    fun updateValue(newValue: Int) {
-        val result = newValue.coerceIn(
-            range.first,
-            range.last
+    fun updateValue(current: Int, delta: Long) {
+        val next = (current.toLong() + delta).coerceIn(
+            range.first.toLong(),
+            range.last.toLong()
         )
-
-        textValue = result.toString()
-        onValueChange(result)
+        onValueChange(next.toInt())
     }
 
     Row(
@@ -48,7 +38,7 @@ fun Stepper(
         IconButton(
             enabled = enabled,
             onClick = {
-                updateValue(value - step)
+                updateValue(value, -step.toLong())
             }
         ) {
             Icon(
@@ -57,12 +47,12 @@ fun Stepper(
             )
         }
 
-        Text(text = textValue, modifier = Modifier.width(60.dp), textAlign = TextAlign.Center)
+        Text(text = value.toString(), modifier = Modifier.width(60.dp), textAlign = TextAlign.Center)
 
         IconButton(
             enabled = enabled,
             onClick = {
-                updateValue(value + step)
+                updateValue(value, step.toLong())
             }
         ) {
             Icon(

@@ -4,36 +4,38 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.material3.SnackbarDuration
 import com.zuoguan.bilimusickmp.models.AudioSource
-import com.zuoguan.bilimusickmp.models.CoverSource
-import com.zuoguan.bilimusickmp.models.LyricSource
 import com.zuoguan.bilimusickmp.models.PlaySource
 import com.zuoguan.bilimusickmp.models.SearchResult
-import com.zuoguan.bilimusickmp.models.Song
 import com.zuoguan.bilimusickmp.models.TrackInfo
 import com.zuoguan.bilimusickmp.services.AudioPlayService
 import com.zuoguan.bilimusickmp.services.BiliService
 import com.zuoguan.bilimusickmp.services.KuGouService
 import com.zuoguan.bilimusickmp.services.NetEaseService
-import com.zuoguan.bilimusickmp.services.SongMetadataService
-import com.zuoguan.bilimusickmp.services.SongRepositoryService
 import com.zuoguan.bilimusickmp.utils.UiEvent
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+/**
+ * 搜索页状态。
+ *
+ * 只负责"搜索"这一件事：歌曲的新建/编辑全部由 [SongEditorViewModel] 承担，
+ * 因此这里不再持有 add 对话框相关的状态。
+ */
 class SearchPageViewModel(
     private val biliService: BiliService,
     private val netEaseService: NetEaseService,
     private val audioPlayService: AudioPlayService,
-    private val songRepository: SongRepositoryService,
     private val kuGouService: KuGouService,
-    private val songMetadataService: SongMetadataService
 ) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -41,20 +43,12 @@ class SearchPageViewModel(
     val lazyGridState = LazyGridState()
 
     private val _uiState = MutableStateFlow(SearchUiState())
-    val uiState: StateFlow<SearchUiState> = _uiState
+    val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
+
+    private var searchJob: Job? = null
 
     private val _uiEvents = Channel<UiEvent>(Channel.BUFFERED)
     val uiEvents = _uiEvents.receiveAsFlow()
-
-    init {
-        scope.launch {
-            songRepository.allTags.collect { tags ->
-                _uiState.update {
-                    it.copy(allTags = tags)
-                }
-            }
-        }
-    }
 
     fun onKeywordChange(value: String) {
         _uiState.value = _uiState.value.copy(keyword = value)
@@ -68,15 +62,16 @@ class SearchPageViewModel(
 
     fun search() {
         val state = _uiState.value
-        val keyword = state.keyword
+        val keyword = state.keyword.trim()
         if (keyword.isBlank()) return
 
+        searchJob?.cancel()
         _uiState.value = _uiState.value.copy(
             isSearchLoading = true,
             searchError = null
         )
 
-        scope.launch {
+        searchJob = scope.launch {
             try {
                 val result = when (state.audioSource) {
                     AudioSource.BILI_BILI ->
@@ -98,6 +93,8 @@ class SearchPageViewModel(
                         results = result
                     )
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(
@@ -152,10 +149,13 @@ class SearchPageViewModel(
             try {
                 audioPlayService.play(track)
             }
+            catch (e: CancellationException){
+                throw e
+            }
             catch (e: Exception){
                 _uiEvents.send(
                     UiEvent.ShowSnackBar(
-                        message = e.message!! + "，请重试",
+                        message = (e.message ?: "播放失败") + "，请重试",
                         duration = SnackbarDuration.Long
                     )
                 )
@@ -163,68 +163,6 @@ class SearchPageViewModel(
         }
     }
 
-    fun requestAdd(item: SearchResult) {
-        _uiState.value = _uiState.value.copy(
-            showAddDialog = true,
-            isExtractInfoLoading = true,
-            songToAdd = null
-        )
-        scope.launch {
-            try {
-                var song: Song
-                if (item.audioSource == AudioSource.BILI_BILI) {
-                    song = songMetadataService.resolve(Song().apply {
-                        id = item.id
-                        audioSource = item.audioSource
-                        title = item.title
-                        author = item.author
-                        pic = item.pic
-                        ts = System.currentTimeMillis()
-                    })
-                }
-                else
-                {
-                    song = Song().apply {
-                        id = item.id
-                        audioSource = item.audioSource
-                        title = item.title
-                        author = item.author
-                        lyricSource = if (item.audioSource == AudioSource.KU_GOU) LyricSource.KU_GOU  else LyricSource.NET_EASE
-                        lyricId = item.id
-                        coverSource = if (item.audioSource == AudioSource.KU_GOU) CoverSource.KU_GOU  else CoverSource.NET_EASE
-                        coverId = item.id
-                        pic = item.pic
-                        ts = System.currentTimeMillis()
-                    }
-                }
-
-                _uiState.value = _uiState.value.copy(
-                    isExtractInfoLoading = false,
-                    songToAdd = song
-                )
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    isExtractInfoLoading = false
-                )
-                _uiEvents.send(
-                    UiEvent.ShowSnackBar(
-                        message = e.message!!,
-                        duration = SnackbarDuration.Long
-                    )
-                )
-            }
-        }
-    }
-
-    fun confirmAdd(song: Song) {
-        scope.launch {
-            songRepository.saveSong(song)
-        }
-    }
-
-    fun cancelAdd() {
-        _uiState.value = _uiState.value.copy(showAddDialog = false)
-    }
 }
 
 data class SearchUiState(
@@ -232,9 +170,5 @@ data class SearchUiState(
     val audioSource: AudioSource = AudioSource.BILI_BILI,
     val isSearchLoading: Boolean = false,
     val results: List<SearchResult> = emptyList(),
-    val searchError: String? = null,
-    val showAddDialog: Boolean = false,
-    val songToAdd: Song? = null,
-    val isExtractInfoLoading: Boolean = false,
-    val allTags: List<String> = emptyList()
+    val searchError: String? = null
 )

@@ -32,6 +32,13 @@ fun TagsEditor(
     onToggleTag: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    fun submitTag(raw: String) {
+        val text = raw.trim()
+        if (text.isBlank()) return
+        onAddTag(text)
+        onNewTagTextChange("")
+    }
+
     Column(modifier) {
         OutlinedTextField(
             value = newTagText,
@@ -40,20 +47,14 @@ fun TagsEditor(
             singleLine = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(
-                onDone = {
-                    val text = newTagText.trim()
-                    if (text.isNotBlank()) {
-                        onAddTag(text)
-                    }
-                }
+                onDone = { submitTag(newTagText) }
             ),
             modifier = Modifier.fillMaxWidth(),
             trailingIcon = {
-                val text = newTagText.trim()
-                if (text.isNotBlank()) {
+                if (newTagText.isNotBlank()) {
                     IconButton(
                         modifier = Modifier.pointerHoverIcon(PointerIcon.Default),
-                        onClick = { onAddTag(text) }
+                        onClick = { submitTag(newTagText) }
                     ) {
                         Icon(Icons.Default.Add, contentDescription = "添加")
                     }
@@ -67,7 +68,7 @@ fun TagsEditor(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            allTags.forEach { tag ->
+            allTags.distinct().forEach { tag ->
                 TagChip(tag, tag in selectedTags, onToggleTag)
             }
         }

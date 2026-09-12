@@ -33,16 +33,18 @@ fun LyricsPage(viewModel: LyricsPageViewModel = koinInject()) {
         mutableStateOf(currentTrack?.lyricBias ?: 0)
     }
     val listState = rememberLazyListState()
-    val currentIndex = remember(uiState.currentPositionMs, uiState.lyrics) {
-        uiState.lyrics.indexOfLast { it.timeMs + bias <= uiState.currentPositionMs }.coerceAtLeast(0)
+    val currentIndex = remember(uiState.currentPositionMs, uiState.lyrics, bias) {
+        uiState.lyrics.indexOfLast { it.timeMs + bias <= uiState.currentPositionMs }
     }
     val density = LocalDensity.current
     var height by remember { mutableStateOf(0.dp) }
 
     LaunchedEffect(currentIndex) {
-        listState.animateScrollToItem(
-            index = currentIndex,
-        )
+        // -1 表示"还没有任何一句开始"
+        if (currentIndex < 0) return@LaunchedEffect
+        // 用户正在手动滚动时不要抢滚动位置
+        if (listState.isScrollInProgress) return@LaunchedEffect
+        listState.animateScrollToItem(index = currentIndex)
     }
 
     Row(

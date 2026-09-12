@@ -2,7 +2,6 @@ package com.zuoguan.bilimusickmp.ui
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -65,7 +64,10 @@ fun MobileSearchResultItem(
                     .aspectRatio(1.6f)
                     .clip(RoundedCornerShape(12.dp))
             ) {
-                when (val resource = asyncPainterResource(convertImageUrl(item.pic, 320, 200))) {
+
+                if (item.pic.isBlank()) {
+                    CoverPlaceholder()
+                } else when (val resource = asyncPainterResource(convertImageUrl(item.pic, 320, 200))) {
                     is Resource.Loading -> {
                         CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                     }
@@ -148,6 +150,7 @@ fun PcSearchResultItem(
     onAddButtonClick: (SearchResult) -> Unit
 ) {
     Card(
+        onClick = { onItemClick(item) },
         modifier = Modifier
             .fillMaxWidth()
             .padding(16.dp),
@@ -155,9 +158,9 @@ fun PcSearchResultItem(
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Column(
+            // 点击区域交给 Card，避免只有内层内容可点（卡片 padding 点不到）
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { onItemClick(item) }
                 .padding(top = 16.dp, bottom = 8.dp, start = 16.dp, end = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ){
@@ -166,7 +169,9 @@ fun PcSearchResultItem(
                     .fillMaxWidth()
                     .aspectRatio(1.6f)
             ) {
-                when (val resource = asyncPainterResource(convertImageUrl(item.pic, 512, 320))) {
+                if (item.pic.isBlank()) {
+                    CoverPlaceholder()
+                } else when (val resource = asyncPainterResource(convertImageUrl(item.pic, 512, 320))) {
                     is Resource.Loading -> {
                         CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                     }

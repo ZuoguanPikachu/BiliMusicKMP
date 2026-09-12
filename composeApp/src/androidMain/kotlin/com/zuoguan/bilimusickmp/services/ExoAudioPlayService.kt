@@ -16,9 +16,11 @@ import com.zuoguan.bilimusickmp.models.PlayMode
 import com.zuoguan.bilimusickmp.models.PlaybackState
 import com.zuoguan.bilimusickmp.models.TrackInfo
 import com.zuoguan.bilimusickmp.models.AudioSource
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -31,21 +33,37 @@ import java.util.concurrent.TimeUnit
 import androidx.core.net.toUri
 import com.zuoguan.bilimusickmp.models.PlaySource
 import com.zuoguan.bilimusickmp.utils.convertImageUrl
+import kotlin.time.Duration.Companion.milliseconds
 
 class ExoAudioPlayService(
-    context: Context
+    context: Context,
+    private val onError: (String) -> Unit = {}
 ): AudioPlayService {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    // 全曲目共用一个 OkHttpClient / DataSource.Factory，避免每首歌新建连接池与线程
+    private val okHttpClient = OkHttpClient.Builder()
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(15, TimeUnit.SECONDS)
+        .build()
+
+    @OptIn(UnstableApi::class)
+    private val dataSourceFactory = OkHttpDataSource.Factory(okHttpClient)
+
     // ExoPlayer 实例
+    @OptIn(UnstableApi::class)
     val player: ExoPlayer = ExoPlayer.Builder(context)
         .setAudioAttributes(
             AudioAttributes.Builder()
                 .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
                 .setUsage(C.USAGE_MEDIA)
                 .build(),
-            true
+            true // 自动处理音频焦点
         )
+        // 耳机拔出时自动暂停，避免外放"社死"
+        .setHandleAudioBecomingNoisy(true)
+        // 息屏后仍能继续播放
+        .setWakeMode(C.WAKE_MODE_NETWORK)
         .build()
 
     private val _state = MutableStateFlow(PlaybackState.Stopped)
@@ -70,11 +88,16 @@ class ExoAudioPlayService(
     private val _duration = MutableStateFlow(0L)
     override val duration: StateFlow<Long> = _duration.asStateFlow()
 
+    /** 已释放标记：释放后不再触发任何回调逻辑。 */
+    @Volatile
+    private var released = false
+
     init {
         player.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 _state.value = when (playbackState) {
                     Player.STATE_IDLE -> PlaybackState.Stopped
+                    // 缓冲阶段仍视为"播放中"，避免 UI 在起播瞬间闪烁
                     Player.STATE_BUFFERING -> PlaybackState.Playing
                     Player.STATE_READY -> if (player.playWhenReady) PlaybackState.Playing else PlaybackState.Paused
                     Player.STATE_ENDED -> PlaybackState.Ended
@@ -90,38 +113,25 @@ class ExoAudioPlayService(
 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                 _state.value = PlaybackState.Error
-                println()
+                onError(error.message ?: "播放失败")
             }
 
-            @OptIn(UnstableApi::class)
             override fun onMediaItemTransition(
                 mediaItem: MediaItem?,
                 reason: Int
             ) {
-                when (reason) {
-                    Player.MEDIA_ITEM_TRANSITION_REASON_AUTO -> {
-                        autoNext(mediaItem)
-                    }
-
-                    Player.MEDIA_ITEM_TRANSITION_REASON_SEEK -> {
-                        autoNext(mediaItem)
-                    }
-
-                    Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED -> {
-
-                    }
-
-                    Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT -> {
-
-                    }
+                // 只有"自动播完切下一首"才算前进；SEEK（拖动进度/切歌）不应触发自动续播，
+                // 否则通知栏的"上一首"会被当成"下一首"。
+                if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) {
+                    autoNext(mediaItem)
                 }
             }
 
         })
-        
+
         scope.launch {
-            while (true) {
-                withContext(Dispatchers.Main.immediate){
+            while (!released) {
+                withContext(Dispatchers.Main.immediate) {
                     if (player.playbackState == Player.STATE_READY) {
                         val dur = player.duration.coerceAtLeast(0L)
                         _duration.value = dur
@@ -135,7 +145,7 @@ class ExoAudioPlayService(
                     }
                 }
 
-                delay(500)
+                delay(500.milliseconds)
             }
         }
     }
@@ -178,12 +188,7 @@ class ExoAudioPlayService(
             }
         }
 
-        val okHttpClient = OkHttpClient.Builder()
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(15, TimeUnit.SECONDS)
-            .build()
-
-        val dataSourceFactory = OkHttpDataSource.Factory(okHttpClient)
+        val factory = dataSourceFactory
             .setDefaultRequestProperties(headers)
 
         val mediaMetadata = MediaMetadata.Builder()
@@ -200,7 +205,7 @@ class ExoAudioPlayService(
             .setMediaId(track.id)
             .build()
 
-        val mediaSource = ProgressiveMediaSource.Factory(dataSourceFactory)
+        val mediaSource = ProgressiveMediaSource.Factory(factory)
             .createMediaSource(mediaItem)
 
         return mediaSource
@@ -208,57 +213,63 @@ class ExoAudioPlayService(
 
     @OptIn(UnstableApi::class)
     override suspend fun play(track: TrackInfo) {
+        val currentSource = buildMediaSource(track)
+        // 预取下一首只是优化：失败不能影响当前歌曲起播
+        val nextSource = if (track.playSource == PlaySource.PLAYLIST) {
+            getNextTrack()?.takeIf { it.id != track.id }?.let { next ->
+                try {
+                    buildMediaSource(next)
+                } catch (e: Exception) {
+                    null
+                }
+            }
+        } else {
+            null
+        }
+
         withContext(Dispatchers.Main.immediate) {
+            _currentTrack.value = track
             player.stop()
             player.clearMediaItems()
-        }
-
-        _currentTrack.value = track
-        val currMediaSource = buildMediaSource(track)
-
-        if (track.playSource == PlaySource.PLAYLIST) {
-            val nextMediaSource = buildMediaSource(getNextTrack()!!)
-
-            withContext(Dispatchers.Main.immediate) {
-                player.setMediaSources(listOf(currMediaSource, nextMediaSource), false)
-                player.prepare()
-                player.playWhenReady = true
+            if (nextSource != null) {
+                player.setMediaSources(listOf(currentSource, nextSource), false)
+            } else {
+                player.setMediaSource(currentSource)
             }
+            player.prepare()
+            player.playWhenReady = true
         }
-        else {
-            withContext(Dispatchers.Main.immediate) {
-                player.setMediaSource(currMediaSource)
-                player.prepare()
-                player.playWhenReady = true
-            }
-        }
-
     }
 
-    @OptIn(UnstableApi::class)
     fun autoNext(mediaItem: MediaItem?) {
-        if (getNextTrack()!!.id == mediaItem?.mediaId){
-            _currentTrack.value = playlist.first { it.id == mediaItem.mediaId }
+        val next = getNextTrack() ?: return
+        val itemId = mediaItem?.mediaId
+
+        if (next.id == itemId) {
+            // 预取的那首已经自动接上：同步 UI 状态并继续预取再下一首
+            _currentTrack.value = playlist.firstOrNull { it.id == itemId } ?: next
             scope.launch {
-                try{
-                    val nextMediaSource = buildMediaSource(getNextTrack()!!)
-                    withContext(Dispatchers.Main.immediate){
+                try {
+                    val following = getFollowingTrack(next) ?: return@launch
+                    val nextMediaSource = buildMediaSource(following)
+                    withContext(Dispatchers.Main.immediate) {
                         player.addMediaSource(nextMediaSource)
                     }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    // 预取失败不影响当前播放
                 }
-                catch (e: Exception){
-
-                }
-
             }
-        }
-        else {
+        } else {
             scope.launch {
-                try{
-                    play(getNextTrack()!!)
-                }
-                catch (e: Exception){
-
+                try {
+                    play(next)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    _state.value = PlaybackState.Error
+                    onError(e.message ?: "播放失败")
                 }
             }
         }
@@ -287,9 +298,10 @@ class ExoAudioPlayService(
 
     override suspend fun seek(position: Float) {
         val safePos = position.coerceIn(0f, 1f)
-        val seekMs = (player.duration * safePos).toLong().coerceAtLeast(0L)
         withContext(Dispatchers.Main.immediate) {
-            player.seekTo(seekMs)
+            // ExoPlayer 只允许在应用主线程访问，duration 也必须在这读
+            val duration = player.duration.coerceAtLeast(0L)
+            player.seekTo((duration * safePos).toLong())
         }
     }
 
@@ -299,56 +311,79 @@ class ExoAudioPlayService(
         }
     }
 
+    /**
+     * 下一首；无当前曲目 / 歌单为空时返回 null（调用方必须判空）。
+     * 旧实现在此处用 `!!` + `random()` + `% size`，空歌单会直接崩溃。
+     */
     private fun getNextTrack(): TrackInfo? {
-        val current = currentTrack.value!!
-        val nextTrack = when (_playMode.value) {
+        val current = _currentTrack.value ?: return null
+        val list = _playlist.value
+        if (list.isEmpty()) return null
+
+        return when (_playMode.value) {
             PlayMode.SINGLE_LOOP -> current
 
             PlayMode.SHUFFLE -> {
-                val candidates = playlist.filter { it.id != current.id }
-                if (candidates.isNotEmpty()) candidates.random() else playlist.random()
+                val candidates = list.filter { it.id != current.id }
+                if (candidates.isNotEmpty()) candidates.random() else list.random()
             }
 
             PlayMode.SEQUENTIAL -> {
-                val index = playlist.indexOfFirst { it.id == current.id }
-                if (index == -1) playlist.firstOrNull()
-                else playlist[(index + 1) % playlist.size]
+                val index = list.indexOfFirst { it.id == current.id }
+                if (index == -1) list.first()
+                else list[(index + 1) % list.size]
             }
         }
+    }
 
-        return nextTrack
+    /** 某首歌的下一首（用于预取），语义与 [getNextTrack] 一致但以指定曲目为基准。 */
+    private fun getFollowingTrack(track: TrackInfo): TrackInfo? {
+        val list = _playlist.value
+        if (list.isEmpty()) return null
+        return when (_playMode.value) {
+            PlayMode.SINGLE_LOOP -> track
+            PlayMode.SHUFFLE -> list.filter { it.id != track.id }.randomOrNull() ?: track
+            PlayMode.SEQUENTIAL -> {
+                val index = list.indexOfFirst { it.id == track.id }
+                if (index == -1) list.first() else list[(index + 1) % list.size]
+            }
+        }
     }
 
     override suspend fun playNext() {
-        if (playlist.isEmpty()) return
         val nextTrack = getNextTrack() ?: return
         play(nextTrack)
     }
 
     private fun getPrevTrack(): TrackInfo? {
-        val current = currentTrack.value!!
+        val current = _currentTrack.value ?: return null
+        val list = _playlist.value
+        if (list.isEmpty()) return null
 
-        val prevTrack = when (_playMode.value) {
+        return when (_playMode.value) {
             PlayMode.SINGLE_LOOP -> current
 
             PlayMode.SHUFFLE -> {
-                val candidates = playlist.filter { it.id != current.id }
-                if (candidates.isNotEmpty()) candidates.random() else playlist.random()
+                val candidates = list.filter { it.id != current.id }
+                if (candidates.isNotEmpty()) candidates.random() else list.random()
             }
 
             PlayMode.SEQUENTIAL -> {
-                val index = playlist.indexOfFirst { it.id == current.id }
-                if (index <= 0) playlist.lastOrNull()
-                else playlist[index - 1]
+                val index = list.indexOfFirst { it.id == current.id }
+                if (index <= 0) list.last()
+                else list[index - 1]
             }
         }
-
-        return prevTrack
     }
 
     override suspend fun playPrevious() {
-        if (playlist.isEmpty()) return
         val prevTrack = getPrevTrack() ?: return
         play(prevTrack)
+    }
+
+    override fun close() {
+        released = true
+        scope.cancel()
+        player.release()
     }
 }

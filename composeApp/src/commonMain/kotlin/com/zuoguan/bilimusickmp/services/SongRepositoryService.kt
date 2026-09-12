@@ -34,9 +34,9 @@ data class DirtySync(
  * 歌曲仓库（本地数据入口）：
  *
  * - 每个歌曲文档带 [SongDto.updatedAt] 内容版本（LWW 依据），升级前存量数据为 0（基线）；
- * - 顺序存于 `_order` 元文档（有序 id 列表 + 版本），歌曲的 [Song.ts] 由顺序索引推导，
+ * - 顺序存于 `~order` 元文档（有序 id 列表 + 版本），歌曲的 [Song.ts] 由顺序索引推导，
  *   不再写回文档 —— 排序只改一个文档；
- * - 删除写 `_del:<id>` 墓碑文档，防止合并时已删除的歌曲被复活；
+ * - 删除写 `~del:<id>` 墓碑文档，防止合并时已删除的歌曲被复活；
  * - 用户变更通过 [userChanges] 通知云同步服务做防抖推送。
  */
 class SongRepositoryService {
@@ -121,14 +121,14 @@ class SongRepositoryService {
         return docToSong(doc, getOrderIds())
     }
 
-    /** 重新排序：以传入列表为基准，未出现在列表中的歌曲按原相对顺序补在末尾。 */
+    /** 重新排序：只调整传入歌曲彼此的相对位次，未传入的歌曲保持原位。 */
     suspend fun persistOrder(songs: List<Song>) {
         applyOrderIds(songs.map { it.id }, bump = true)
         loadSongs()
         _userChanges.tryEmit(Unit)
     }
 
-    // ---------- 顺序（_order 元文档） ----------
+    // ---------- 顺序（~order 元文档） ----------
 
     private fun ensureOrderIndex() {
         if (coll.getDocument(ORDER_DOC_ID) != null) return
@@ -170,9 +170,20 @@ class SongRepositoryService {
     }
 
     private fun applyOrderIds(ids: List<String>, bump: Boolean) {
-        val existing = getOrderIds()
-        val merged = ids + existing.filterNot { it in ids }
+        val merged = mergeSubsetOrder(getOrderIds(), ids)
         coll.save(orderDocument(merged, if (bump) nextClock() else getOrderUpdatedAt()))
+    }
+
+    private fun mergeSubsetOrder(existing: List<String>, subsetIds: List<String>): List<String> {
+        if (subsetIds.isEmpty()) return existing
+        val subsetSet = subsetIds.toSet()
+        val pending = ArrayDeque(subsetIds)
+        val result = ArrayList<String>(existing.size + subsetIds.size)
+        for (id in existing) {
+            result += if (id in subsetSet) pending.removeFirst() else id
+        }
+        result += pending
+        return result
     }
 
     private fun orderDocument(ids: List<String>, updatedAt: Long): MutableDocument =
@@ -352,39 +363,37 @@ class SongRepositoryService {
         pic = row.getString("pic") ?: ""
     )
 
-    private fun rowToSong(row: Result, id: String, orderIds: List<String>): Song {
-        val song = Song()
-        song.id = id
-        song.cid = row.getString("cid") ?: ""
-        song.audioSource = parseAudioSource(row.getString("audioSource"))
-        song.title = row.getString("title") ?: ""
-        song.author = row.getString("author") ?: ""
-        song.tags = row.getArray("tags")?.toList()?.mapNotNull { it.toString() } ?: emptyList()
-        song.lyricSource = parseLyricSource(row.getString("lyricSource"))
-        song.lyricId = row.getString("lyricId") ?: ""
-        song.lyricBias = row.getInt("lyricBias")
-        song.coverSource = parseCoverSource(row.getString("coverSource"))
-        song.coverId = row.getString("coverId") ?: ""
-        song.pic = row.getString("pic") ?: ""
-        song.ts = orderIndex(orderIds, id)
-        return song
-    }
-
-    private fun docToSong(doc: Document, orderIds: List<String>): Song = Song().apply {
-        id = doc.id
-        cid = doc.getString("cid") ?: ""
-        audioSource = parseAudioSource(doc.getString("audioSource"))
-        title = doc.getString("title") ?: ""
-        author = doc.getString("author") ?: ""
-        tags = doc.getArray("tags")?.toList()?.mapNotNull { it.toString() } ?: emptyList()
-        lyricSource = parseLyricSource(doc.getString("lyricSource"))
-        lyricId = doc.getString("lyricId") ?: ""
-        lyricBias = doc.getInt("lyricBias")
-        coverSource = parseCoverSource(doc.getString("coverSource"))
-        coverId = doc.getString("coverId") ?: ""
-        pic = doc.getString("pic") ?: ""
+    private fun rowToSong(row: Result, id: String, orderIds: List<String>): Song = Song(
+        id = id,
+        cid = row.getString("cid") ?: "",
+        audioSource = parseAudioSource(row.getString("audioSource")),
+        title = row.getString("title") ?: "",
+        author = row.getString("author") ?: "",
+        tags = row.getArray("tags")?.toList()?.mapNotNull { it.toString() } ?: emptyList(),
+        lyricSource = parseLyricSource(row.getString("lyricSource")),
+        lyricId = row.getString("lyricId") ?: "",
+        lyricBias = row.getInt("lyricBias"),
+        coverSource = parseCoverSource(row.getString("coverSource")),
+        coverId = row.getString("coverId") ?: "",
+        pic = row.getString("pic") ?: "",
         ts = orderIndex(orderIds, id)
-    }
+    )
+
+    private fun docToSong(doc: Document, orderIds: List<String>): Song = Song(
+        id = doc.id,
+        cid = doc.getString("cid") ?: "",
+        audioSource = parseAudioSource(doc.getString("audioSource")),
+        title = doc.getString("title") ?: "",
+        author = doc.getString("author") ?: "",
+        tags = doc.getArray("tags")?.toList()?.mapNotNull { it.toString() } ?: emptyList(),
+        lyricSource = parseLyricSource(doc.getString("lyricSource")),
+        lyricId = doc.getString("lyricId") ?: "",
+        lyricBias = doc.getInt("lyricBias"),
+        coverSource = parseCoverSource(doc.getString("coverSource")),
+        coverId = doc.getString("coverId") ?: "",
+        pic = doc.getString("pic") ?: "",
+        ts = orderIndex(orderIds, doc.id)
+    )
 
     private fun orderIndex(orderIds: List<String>, id: String): Long {
         val idx = orderIds.indexOf(id)

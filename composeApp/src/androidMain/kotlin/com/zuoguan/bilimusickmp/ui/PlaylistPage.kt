@@ -27,15 +27,13 @@ import io.kamel.image.asyncPainterResource
 import org.koin.compose.koinInject
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
-import com.zuoguan.bilimusickmp.LocalSnackBarHostState
 import com.zuoguan.bilimusickmp.models.Page
 import com.zuoguan.bilimusickmp.models.PlaySource
 import com.zuoguan.bilimusickmp.models.Song
 import com.zuoguan.bilimusickmp.services.NavigationService
-import com.zuoguan.bilimusickmp.services.SongEditService
-import com.zuoguan.bilimusickmp.utils.UiEvent
 import com.zuoguan.bilimusickmp.utils.convertImageUrl
 import com.zuoguan.bilimusickmp.vm.PlaylistPageViewModel
+import com.zuoguan.bilimusickmp.vm.SongEditorViewModel
 import com.zuoguan.bilimusickmp.vm.TagFilterMode
 
 
@@ -44,28 +42,9 @@ import com.zuoguan.bilimusickmp.vm.TagFilterMode
 fun PlaylistPage(
     viewModel: PlaylistPageViewModel = koinInject(),
     navigationService: NavigationService = koinInject(),
-    songEditService: SongEditService = koinInject()
+    songEditorViewModel: SongEditorViewModel = koinInject()
 ) {
     val state by viewModel.uiState.collectAsState()
-    val coroutineScope = rememberCoroutineScope()
-    val snackBarHostState = LocalSnackBarHostState.current
-
-    LaunchedEffect(Unit) {
-        viewModel.uiEvents.collect { event ->
-            when (event) {
-                is UiEvent.ShowSnackBar -> {
-                    coroutineScope.launch {
-                        snackBarHostState.showSnackbar(
-                            message = event.message,
-                            actionLabel = event.actionLabel,
-                            duration = event.duration,
-                            withDismissAction = true,
-                        )
-                    }
-                }
-            }
-        }
-    }
 
     val hapticFeedback = LocalHapticFeedback.current
     val lazyListState = viewModel.lazyListState
@@ -126,6 +105,7 @@ fun PlaylistPage(
     }
 
     if (state.showBottomSheet) {
+        val song = state.songToHandle
         ModalBottomSheet(
             onDismissRequest = viewModel::dismissBottomSheet,
             sheetState = rememberModalBottomSheetState(),
@@ -141,8 +121,11 @@ fun PlaylistPage(
                     modifier = Modifier.fillMaxWidth(),
                     onClick = {
                         viewModel.dismissBottomSheet()
-                        songEditService.editSong(state.songToHandle!!, "Playlist")
-                        navigationService.navigate(Page.SONG_EDIT)
+                        if (song != null) {
+                            // 编辑已有歌曲：字段都是现成的，不需要补全
+                            songEditorViewModel.openForEdit(song)
+                            navigationService.navigate(Page.SONG_EDIT)
+                        }
                     }
                 ) {
                     ListItem(
@@ -155,8 +138,10 @@ fun PlaylistPage(
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     onClick = {
-                        viewModel.requestDelete(state.songToHandle!!)
                         viewModel.dismissBottomSheet()
+                        if (song != null) {
+                            viewModel.requestDelete(song)
+                        }
                     }
                 ){
                     ListItem(
@@ -175,11 +160,13 @@ fun PlaylistPage(
     }
 
     if (state.showDeleteDialog) {
-        DeleteSongConfirmDialog(
-            song = state.songToHandle!!,
-            onConfirm = viewModel::confirmDelete,
-            onDismiss = viewModel::cancelDelete
-        )
+        state.songToHandle?.let { song ->
+            DeleteSongConfirmDialog(
+                song = song,
+                onConfirm = viewModel::confirmDelete,
+                onDismiss = viewModel::cancelDelete
+            )
+        }
     }
 }
 

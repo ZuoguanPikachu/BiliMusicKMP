@@ -131,10 +131,10 @@ class CloudSyncService(
                 }
 
                 // 推送脏数据（自愈：若推送后 head 被他人推进，则拉取合并后重推）
-                repeat(MAX_HEAL_ROUNDS) {
-                    val pushedV = push(device) ?: return@repeat
-                    val verify = fetchHead() ?: return@repeat
-                    if (verify.v == pushedV) return@repeat
+                for (round in 0 until MAX_HEAL_ROUNDS) {
+                    val pushedV = push(device) ?: break
+                    val verify = fetchHead() ?: break
+                    if (verify.v == pushedV) break // 推送成功且未被人抢先，结束
                     pull(verify, prefs.getLong(SyncKeys.LOCAL_HEAD_V))
                     prefs.putLong(SyncKeys.LOCAL_HEAD_V, verify.v)
                 }

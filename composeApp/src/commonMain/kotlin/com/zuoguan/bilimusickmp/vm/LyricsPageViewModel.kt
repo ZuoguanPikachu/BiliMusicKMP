@@ -1,6 +1,5 @@
 package com.zuoguan.bilimusickmp.vm
 
-import bilimusickmp.composeapp.generated.resources.Res
 import com.zuoguan.bilimusickmp.models.LyricLine
 import com.zuoguan.bilimusickmp.models.PlaybackState
 import com.zuoguan.bilimusickmp.models.TrackInfo
@@ -34,7 +33,7 @@ class LyricsPageViewModel(
         scope.launch {
             audioPlayService.currentTrack
                 .filterNotNull()
-                .distinctUntilChangedBy { track -> track.id to track.lyricsProvider }
+                .distinctUntilChangedBy { track -> track.id }
                 .collect { track ->
                     loadLyricsInternal(track)
                 }
@@ -83,15 +82,12 @@ class LyricsPageViewModel(
     }
 
     fun saveLyricBias(songId: String, bias: Int) {
-        val song = songRepositoryService.getSongById(songId)
-        if (song != null) {
-            song.apply {
-                lyricBias = bias
-            }
+        val song = songRepositoryService.getSongById(songId) ?: return
+        // Song 不可变：用 copy 生成新实例，不再就地修改
+        val updated = song.copy(lyricBias = bias)
 
-            scope.launch {
-                songRepositoryService.saveSong(song)
-            }
+        scope.launch {
+            songRepositoryService.saveSong(updated)
         }
     }
 

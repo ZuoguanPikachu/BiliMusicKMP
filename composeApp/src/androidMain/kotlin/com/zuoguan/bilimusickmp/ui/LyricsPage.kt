@@ -38,14 +38,17 @@ fun LyricsPage(
         mutableStateOf(currentTrack?.lyricBias ?: 0)
     }
     val listState = rememberLazyListState()
-    val currentIndex = remember(uiState.currentPositionMs, uiState.lyrics) {
-        uiState.lyrics.indexOfLast { it.timeMs + bias <= uiState.currentPositionMs }.coerceAtLeast(0)
+    // bias 也参与计算：调整歌词延时后应当立即重新高亮
+    val currentIndex = remember(uiState.currentPositionMs, uiState.lyrics, bias) {
+        uiState.lyrics.indexOfLast { it.timeMs + bias <= uiState.currentPositionMs }
     }
 
     LaunchedEffect(currentIndex) {
-        listState.animateScrollToItem(
-            index = currentIndex
-        )
+        // -1 表示"还没有任何一句开始"（旧实现 coerceAtLeast(0) 会错误地高亮第一句）
+        if (currentIndex < 0) return@LaunchedEffect
+        // 用户正在手动滚动时不要抢滚动位置
+        if (listState.isScrollInProgress) return@LaunchedEffect
+        listState.animateScrollToItem(index = currentIndex)
     }
     BackHandler(enabled = true) {
         navigationService.back()

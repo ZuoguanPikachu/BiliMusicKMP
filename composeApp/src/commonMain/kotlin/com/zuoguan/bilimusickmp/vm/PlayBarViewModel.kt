@@ -4,6 +4,7 @@ import com.zuoguan.bilimusickmp.models.PlayMode
 import com.zuoguan.bilimusickmp.models.PlaybackState
 import com.zuoguan.bilimusickmp.models.TrackInfo
 import com.zuoguan.bilimusickmp.services.AudioPlayService
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -74,6 +75,28 @@ class PlayBarViewModel(
     fun resume() {
         scope.launch {
             audioPlayService.resume()
+        }
+    }
+
+    fun togglePlayPause() {
+        val state = _uiState.value
+        when (state.playbackState) {
+            PlaybackState.Playing -> pause()
+            PlaybackState.Paused -> resume()
+            PlaybackState.Stopped,
+            PlaybackState.Ended,
+            PlaybackState.Error -> {
+                val track = state.currentTrack ?: return
+                scope.launch {
+                    try {
+                        audioPlayService.play(track)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        _uiState.update { it.copy(playbackState = PlaybackState.Error) }
+                    }
+                }
+            }
         }
     }
 

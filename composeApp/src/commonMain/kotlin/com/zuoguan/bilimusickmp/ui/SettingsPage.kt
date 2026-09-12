@@ -6,8 +6,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material3.Button
@@ -20,6 +22,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,19 +45,27 @@ fun SettingsPage(
 ) {
     val state by viewModel.uiState.collectAsState()
 
-    var apiKey by remember(state) { mutableStateOf(state.llmConfig.apiKey) }
-    var baseUrl by remember(state) { mutableStateOf(state.llmConfig.baseUrl) }
-    var modelName by remember(state) { mutableStateOf(state.llmConfig.modelName) }
+    var apiKey by remember { mutableStateOf(state.llmConfig.apiKey) }
+    var baseUrl by remember { mutableStateOf(state.llmConfig.baseUrl) }
+    var modelName by remember { mutableStateOf(state.llmConfig.modelName) }
+    var script by remember { mutableStateOf(state.script) }
 
-    var script by remember(state) {mutableStateOf(state.script)}
+    LaunchedEffect(state.llmConfig) {
+        apiKey = state.llmConfig.apiKey
+        baseUrl = state.llmConfig.baseUrl
+        modelName = state.llmConfig.modelName
+    }
+    LaunchedEffect(state.script) {
+        script = state.script
+    }
 
-
-    LazyColumn(
-        modifier = modifier,
-        contentPadding = contentPadding
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(contentPadding)
     ) {
-        item {
-            SettingsSection(title = "LLM 配置") {
+        SettingsSection(title = "LLM 配置") {
                 Column(modifier = Modifier.padding(16.dp)) {
                     OutlinedTextField(
                         apiKey,
@@ -120,37 +131,36 @@ fun SettingsPage(
                         Text("保存")
                     }
                 }
-            }
         }
 
-        item {
-            SettingsSection(title = "云同步Script") {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    OutlinedTextField(
-                        value = script,
-                        onValueChange = { script = it },
-                        modifier = Modifier.fillMaxSize(),
-                        textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace),
-                        maxLines = 8,
-                    )
+        SettingsSection(title = "云同步Script") {
+            Column(modifier = Modifier.padding(16.dp)) {
+                OutlinedTextField(
+                    value = script,
+                    onValueChange = { script = it },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 160.dp),
+                    textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace),
+                    maxLines = 8,
+                )
 
-                    Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(16.dp))
 
-                    Button(
-                        onClick = { viewModel.saveScript(script) },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("保存")
-                    }
-
-                    Spacer(Modifier.height(16.dp))
-
-                    Text(
-                        text = "同步状态：${state.syncStatus.label}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                Button(
+                    onClick = { viewModel.saveScript(script) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("保存")
                 }
+
+                Spacer(Modifier.height(16.dp))
+
+                Text(
+                    text = "同步状态：${state.syncStatus.label}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }

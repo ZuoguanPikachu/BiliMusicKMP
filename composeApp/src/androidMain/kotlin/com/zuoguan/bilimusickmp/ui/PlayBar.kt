@@ -100,9 +100,7 @@ fun PlayBar(
             }
 
             IconButton(
-                onClick = {
-                    if (isPlaying) viewModel.pause() else viewModel.resume()
-                }
+                onClick = viewModel::togglePlayPause
             ) {
                 Icon(
                     imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,

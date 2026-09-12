@@ -7,9 +7,12 @@ enum class LyricSource : MetadataSource {
 
     override val label: String
         get() = when (this) {
-            NONE -> "NONE"
+            NONE -> "无"
             KU_GOU -> "酷狗音乐"
             NET_EASE -> "网易云音乐"
         }
+
+    override val isNone: Boolean
+        get() = this == NONE
 }
 

@@ -11,7 +11,6 @@ import com.zuoguan.bilimusickmp.services.KuGouService
 import com.zuoguan.bilimusickmp.services.NavigationService
 import com.zuoguan.bilimusickmp.services.NetEaseService
 import com.zuoguan.bilimusickmp.services.PreferencesStorageService
-import com.zuoguan.bilimusickmp.services.SongEditService
 import com.zuoguan.bilimusickmp.services.SongMetadataService
 import com.zuoguan.bilimusickmp.services.SongRepositoryService
 import com.zuoguan.bilimusickmp.utils.migrateLegacyAndroidPreferences
@@ -20,7 +19,7 @@ import com.zuoguan.bilimusickmp.vm.PlayBarViewModel
 import com.zuoguan.bilimusickmp.vm.PlaylistPageViewModel
 import com.zuoguan.bilimusickmp.vm.SearchPageViewModel
 import com.zuoguan.bilimusickmp.vm.SettingsPageViewModel
-import com.zuoguan.bilimusickmp.vm.SongEditPageViewModel
+import com.zuoguan.bilimusickmp.vm.SongEditorViewModel
 import org.koin.android.ext.koin.androidContext
 import org.koin.dsl.module
 import java.io.File
@@ -42,13 +41,13 @@ val appModule = module {
     }
 
     single { NavigationService() }
-    single { SongEditService() }
     single { SongMetadataService(get(), get(), get(), get()) }
     single(createdAtStart = true) { CloudSyncService(get(), get(), get()) }
+    // 歌曲编辑会话：与桌面端共用同一实现，Android 只是用整页承载
+    single { SongEditorViewModel(get(), get()) }
 
-    single { SongEditPageViewModel(get(), get(), get()) }
     single { PlaylistPageViewModel(get(), get(), get(), get(), get()) }
-    single { SearchPageViewModel(get(), get(), get(), get(), get(), get()) }
+    single { SearchPageViewModel(get(), get(), get(), get()) }
     single { SettingsPageViewModel(get(), get(), get()) }
     single { PlayBarViewModel(get()) }
     single { LyricsPageViewModel(get(), get()) }

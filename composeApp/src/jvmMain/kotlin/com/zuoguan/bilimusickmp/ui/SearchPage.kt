@@ -11,47 +11,35 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.text.style.TextAlign
-import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
-import com.zuoguan.bilimusickmp.LocalSnackBarHostState
-import com.zuoguan.bilimusickmp.utils.UiEvent
+import com.zuoguan.bilimusickmp.models.toSong
 import com.zuoguan.bilimusickmp.vm.SearchPageViewModel
+import com.zuoguan.bilimusickmp.vm.SongEditorViewModel
 
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchPage(
-    viewModel: SearchPageViewModel = koinInject()
+    viewModel: SearchPageViewModel = koinInject(),
+    songEditorViewModel: SongEditorViewModel = koinInject(),
 ) {
     val state by viewModel.uiState.collectAsState()
-    val coroutineScope = rememberCoroutineScope()
-    val snackBarHostState = LocalSnackBarHostState.current
+    val editorState by songEditorViewModel.uiState.collectAsState()
 
-    LaunchedEffect(Unit) {
-        viewModel.uiEvents.collect { event ->
-            when (event) {
-                is UiEvent.ShowSnackBar -> {
-                    coroutineScope.launch {
-                        snackBarHostState.showSnackbar(
-                            message = event.message,
-                            actionLabel = event.actionLabel,
-                            duration = event.duration,
-                            withDismissAction = true,
-                        )
-                    }
-                }
-            }
+    LaunchedEffect(state.results) {
+        if (state.results.isNotEmpty()) {
+            viewModel.lazyGridState.scrollToItem(0)
         }
     }
 
-    if (state.showAddDialog) {
+    if (editorState.isOpen) {
         SongInfoEditDialog(
-            "添加歌曲",
-            state.isExtractInfoLoading,
-            state.allTags,
-            state.songToAdd,
-            viewModel::confirmAdd,
-            viewModel::cancelAdd,
+            state = editorState,
+            onEdit = songEditorViewModel::edit,
+            onResolveLyricId = songEditorViewModel::resolveLyricId,
+            onResolveCover = songEditorViewModel::resolveCover,
+            onConfirm = songEditorViewModel::save,
+            onDismiss = songEditorViewModel::dismiss,
         )
     }
 
@@ -132,11 +120,12 @@ fun SearchPage(
                     columns = GridCells.Adaptive(312.dp),
                     state = viewModel.lazyGridState
                 ) {
-                    items(state.results) { item ->
+                    items(state.results, key = { it.id }) { item ->
                         PcSearchResultItem(
                             item,
                             onItemClick = viewModel::playSong,
-                            onAddButtonClick = viewModel::requestAdd
+                            // 与 Android 完全一致：搜索结果 → 新建歌曲会话
+                            onAddButtonClick = { songEditorViewModel.openForCreate(it.toSong()) }
                         )
                     }
                 }

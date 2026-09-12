@@ -1,6 +1,10 @@
 package com.zuoguan.bilimusickmp.models
 
-data class TrackInfo(
+import androidx.compose.runtime.Immutable
+
+
+@Immutable
+class TrackInfo(
     val id: String,
     val title: String,
     val author: String,
@@ -10,4 +14,14 @@ data class TrackInfo(
     val playSource: PlaySource,
     val lyricsProvider: suspend () -> List<LyricLine>,
     val lyricBias: Int = 0,
-)
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is TrackInfo) return false
+        return id == other.id
+    }
+
+    override fun hashCode(): Int = id.hashCode()
+
+    override fun toString(): String = "TrackInfo(id=$id, title=$title)"
+}

@@ -31,6 +31,10 @@ fun PlayBar(
         val state by viewModel.uiState.collectAsState()
         val currentTrack = state.currentTrack
 
+        // 拖动进度条时用本地值，避免异步的播放位置事件把滑块"拽回去"
+        var draggingPosition by remember { mutableStateOf<Float?>(null) }
+        val sliderPosition = draggingPosition ?: state.position
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -102,12 +106,7 @@ fun PlayBar(
                     IconButton(onClick = viewModel::playPrevious) {
                         Icon(Icons.Default.SkipPrevious, contentDescription = null)
                     }
-                    IconButton(onClick = {
-                        if (state.playbackState == PlaybackState.Playing)
-                            viewModel.pause()
-                        else
-                            viewModel.resume()
-                    }) {
+                    IconButton(onClick = viewModel::togglePlayPause) {
                         Icon(
                             if (state.playbackState == PlaybackState.Playing)
                                 Icons.Default.Pause
@@ -122,8 +121,13 @@ fun PlayBar(
                 }
 
                 Slider(
-                    value = state.position,
-                    onValueChange = viewModel::seek,
+                    value = sliderPosition,
+                    // 拖动过程中只更新本地状态，松手时才真正 seek：
+                    onValueChange = { draggingPosition = it },
+                    onValueChangeFinished = {
+                        draggingPosition?.let { viewModel.seek(it) }
+                        draggingPosition = null
+                    },
                     modifier = Modifier.weight(1f),
                     colors = SliderDefaults.colors(
                         thumbColor = MaterialTheme.colorScheme.primary,

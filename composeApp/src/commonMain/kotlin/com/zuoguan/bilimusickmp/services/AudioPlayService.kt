@@ -29,4 +29,6 @@ interface AudioPlayService {
 
     suspend fun playNext()
     suspend fun playPrevious()
+
+    fun close() {}
 }

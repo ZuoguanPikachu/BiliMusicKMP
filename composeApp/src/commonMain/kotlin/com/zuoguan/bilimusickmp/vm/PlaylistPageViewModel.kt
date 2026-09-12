@@ -3,6 +3,7 @@ package com.zuoguan.bilimusickmp.vm
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.SnackbarDuration
 import com.zuoguan.bilimusickmp.models.AudioSource
+import com.zuoguan.bilimusickmp.models.LyricLine
 import com.zuoguan.bilimusickmp.models.LyricSource
 import com.zuoguan.bilimusickmp.models.PlaySource
 import com.zuoguan.bilimusickmp.models.Song
@@ -13,12 +14,14 @@ import com.zuoguan.bilimusickmp.services.KuGouService
 import com.zuoguan.bilimusickmp.services.NetEaseService
 import com.zuoguan.bilimusickmp.services.SongRepositoryService
 import com.zuoguan.bilimusickmp.utils.UiEvent
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -36,10 +39,9 @@ class PlaylistPageViewModel(
     val lazyListState = LazyListState()
 
     private val _uiState = MutableStateFlow(PlaylistUiState())
-    val uiState: StateFlow<PlaylistUiState> = _uiState
+    val uiState: StateFlow<PlaylistUiState> = _uiState.asStateFlow()
 
     private val _isDragging = MutableStateFlow(false)
-    private var pendingState: PlaylistUiState? = null
 
     private val _uiEvents = Channel<UiEvent>(Channel.BUFFERED)
     val uiEvents = _uiEvents.receiveAsFlow()
@@ -78,11 +80,11 @@ class PlaylistPageViewModel(
                     songs = songs,
                     filteredSongs = sorted,
                     allTags = allTags,
+                    selectedTags = selectedTags,
+                    filterMode = mode,
                 )
             }.collect { newState ->
-                if (_isDragging.value) {
-                    pendingState = newState
-                } else {
+                if (!_isDragging.value) {
                     _uiState.value = newState
                 }
             }
@@ -94,24 +96,20 @@ class PlaylistPageViewModel(
     }
 
     fun onDragEnd() {
-        persistOrder()
+        val orderedSongs = _uiState.value.filteredSongs
         _isDragging.value = false
+        scope.launch {
+            songRepository.persistOrder(orderedSongs)
+        }
     }
 
     fun moveSong(from: Int, to: Int) {
         val list = _uiState.value.filteredSongs.toMutableList()
+        if (from !in list.indices) return
         val item = list.removeAt(from)
-        list.add(to, item)
+        list.add(to.coerceIn(0, list.size), item)
 
         _uiState.value = _uiState.value.copy(filteredSongs = list)
-    }
-
-    private fun persistOrder() {
-        val songs = _uiState.value.filteredSongs
-
-        scope.launch {
-            songRepository.persistOrder(songs)
-        }
     }
 
     private fun observeCurrentTrack() {
@@ -125,83 +123,44 @@ class PlaylistPageViewModel(
     }
 
     suspend fun updatePlaylist(list: List<Song>) {
-        audioPlayService.updatePlaylist(
-            list.map { song ->
-                TrackInfo(
-                    id = song.id,
-                    title = song.title,
-                    author = song.author,
-                    audioSource = song.audioSource,
-                    playSource = PlaySource.PLAYLIST,
-                    pic = song.pic,
-                    urlProvider = {
-                        when (song.audioSource) {
-                            AudioSource.BILI_BILI -> {
-                                biliService.getAudioUrl(song.id, song.cid)
-                            }
+        audioPlayService.updatePlaylist(list.map { it.toTrackInfo() })
+    }
 
-                            AudioSource.NET_EASE -> {
-                                netEaseService.getAudioUrl(song.id)
-                            }
+    private fun Song.toTrackInfo(): TrackInfo = TrackInfo(
+        id = id,
+        title = title,
+        author = author,
+        audioSource = audioSource,
+        playSource = PlaySource.PLAYLIST,
+        pic = pic,
+        urlProvider = { resolveAudioUrl() },
+        lyricBias = lyricBias,
+        lyricsProvider = { resolveLyrics() },
+    )
 
-                            AudioSource.KU_GOU -> {
-                                kuGouService.getAudioUrl(song.id)
-                            }
-                        }
-                    },
-                    lyricBias = song.lyricBias,
-                    lyricsProvider = {
-                        when(song.lyricSource){
-                            LyricSource.KU_GOU -> kuGouService.getLyric(song.lyricId)
-                            LyricSource.NET_EASE -> netEaseService.getLyric(song.lyricId)
-                            LyricSource.NONE -> emptyList()
-                        }
-                    }
-                )
-            }
-        )
+    private suspend fun Song.resolveAudioUrl(): String = when (audioSource) {
+        AudioSource.BILI_BILI -> biliService.getAudioUrl(id, cid)
+        AudioSource.NET_EASE -> netEaseService.getAudioUrl(id)
+        AudioSource.KU_GOU -> kuGouService.getAudioUrl(id)
+    }
+
+    private suspend fun Song.resolveLyrics(): List<LyricLine> = when (lyricSource) {
+        LyricSource.KU_GOU -> kuGouService.getLyric(lyricId)
+        LyricSource.NET_EASE -> netEaseService.getLyric(lyricId)
+        LyricSource.NONE -> emptyList()
     }
 
     fun playSong(song: Song) {
-        val track = TrackInfo(
-            id = song.id,
-            title = song.title,
-            author = song.author,
-            audioSource = song.audioSource,
-            playSource = PlaySource.PLAYLIST,
-            pic = song.pic,
-            urlProvider = {
-                when (song.audioSource) {
-                    AudioSource.BILI_BILI -> {
-                        biliService.getAudioUrl(song.id, song.cid)
-                    }
-
-                    AudioSource.NET_EASE -> {
-                        netEaseService.getAudioUrl(song.id)
-                    }
-
-                    AudioSource.KU_GOU -> {
-                        kuGouService.getAudioUrl(song.id)
-                    }
-                }
-            },
-            lyricBias = song.lyricBias,
-            lyricsProvider = {
-                when(song.lyricSource){
-                    LyricSource.KU_GOU -> kuGouService.getLyric(song.lyricId)
-                    LyricSource.NET_EASE -> netEaseService.getLyric(song.lyricId)
-                    LyricSource.NONE -> emptyList()
-                }
-            }
-        )
+        val track = song.toTrackInfo()
         scope.launch {
             try {
                 audioPlayService.play(track)
-            }
-            catch (e: Exception){
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
                 _uiEvents.send(
                     UiEvent.ShowSnackBar(
-                        message = e.message!!,
+                        message = e.message ?: "播放失败，请重试",
                         duration = SnackbarDuration.Long
                     )
                 )
@@ -215,9 +174,9 @@ class PlaylistPageViewModel(
         }
     }
 
-    fun switchOrderingMode(){
+    fun switchOrderingMode() {
         _uiState.update {
-            it.copy(isOrdering = !_uiState.value.isOrdering)
+            it.copy(isOrdering = !it.isOrdering)
         }
     }
 
@@ -263,23 +222,6 @@ class PlaylistPageViewModel(
         }
     }
 
-    fun requestEdit(song: Song) {
-        _uiState.value = _uiState.value.copy(
-            showEditDialog = true,
-            songToHandle = song
-        )
-    }
-
-    fun confirmEdit(song: Song) {
-        scope.launch {
-            songRepository.saveSong(song)
-        }
-    }
-
-    fun cancelEdit(){
-        _uiState.value = _uiState.value.copy(showEditDialog = false)
-    }
-
     fun requestBottomSheet(song: Song) {
         _uiState.value = _uiState.value.copy(
             showBottomSheet = true,
@@ -304,7 +246,6 @@ data class PlaylistUiState(
     val isOrdering: Boolean = false,
 
     val showDeleteDialog: Boolean = false,
-    val showEditDialog: Boolean = false,
     val showBottomSheet: Boolean = false,
 
     val songToHandle: Song? = null,

@@ -15,45 +15,27 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.style.*
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
-import com.zuoguan.bilimusickmp.LocalSnackBarHostState
-import com.zuoguan.bilimusickmp.models.AudioSource
-import com.zuoguan.bilimusickmp.models.CoverSource
-import com.zuoguan.bilimusickmp.models.LyricSource
 import com.zuoguan.bilimusickmp.models.Page
-import com.zuoguan.bilimusickmp.models.Song
+import com.zuoguan.bilimusickmp.models.SearchResult
+import com.zuoguan.bilimusickmp.models.toSong
 import com.zuoguan.bilimusickmp.services.NavigationService
-import com.zuoguan.bilimusickmp.services.SongEditService
-import com.zuoguan.bilimusickmp.utils.UiEvent
 import com.zuoguan.bilimusickmp.vm.SearchPageViewModel
+import com.zuoguan.bilimusickmp.vm.SongEditorViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchPage(
     viewModel: SearchPageViewModel = koinInject(),
     navigationService: NavigationService = koinInject(),
-    songEditService: SongEditService = koinInject()
+    songEditorViewModel: SongEditorViewModel = koinInject()
 ) {
     val state by viewModel.uiState.collectAsState()
-    val coroutineScope = rememberCoroutineScope()
-    val snackBarHostState = LocalSnackBarHostState.current
 
-    LaunchedEffect(Unit) {
-        viewModel.uiEvents.collect { event ->
-            when (event) {
-                is UiEvent.ShowSnackBar -> {
-                    coroutineScope.launch {
-                        snackBarHostState.showSnackbar(
-                            message = event.message,
-                            actionLabel = event.actionLabel,
-                            duration = event.duration,
-                            withDismissAction = true,
-                        )
-                    }
-                }
-            }
-        }
+    // 搜索结果 → 新建歌曲；B 站视频会在编辑器里自动用 LLM 补全歌名/歌手
+    fun openSongEditor(item: SearchResult) {
+        songEditorViewModel.openForCreate(item.toSong())
+        navigationService.navigate(Page.SONG_EDIT)
     }
 
     Column(
@@ -137,33 +119,11 @@ fun SearchPage(
                         contentPadding = PaddingValues(bottom = 96.dp),
                         state = viewModel.lazyGridState
                     ) {
-                        items(state.results) { item ->
+                        items(state.results, key = { it.id }) { item ->
                             PcSearchResultItem(
                                 item,
                                 onItemClick = viewModel::playSong,
-                                onAddButtonClick = {
-                                    songEditService.editSong(Song().apply {
-                                        id = item.id
-                                        audioSource = item.audioSource
-                                        title = item.title
-                                        author = item.author
-                                        lyricId = if (item.audioSource != AudioSource.BILI_BILI) item.id else ""
-                                        lyricSource = when(item.audioSource) {
-                                            AudioSource.BILI_BILI -> LyricSource.NONE
-                                            AudioSource.KU_GOU -> LyricSource.KU_GOU
-                                            AudioSource.NET_EASE -> LyricSource.NET_EASE
-                                        }
-                                        coverId = if (item.audioSource != AudioSource.BILI_BILI) item.id else ""
-                                        coverSource  = when(item.audioSource) {
-                                            AudioSource.BILI_BILI -> CoverSource.BILI_BILI
-                                            AudioSource.KU_GOU -> CoverSource.KU_GOU
-                                            AudioSource.NET_EASE -> CoverSource.NET_EASE
-                                        }
-                                        pic = item.pic
-                                        ts = System.currentTimeMillis()
-                                    }, "Search")
-                                    navigationService.navigate(Page.SONG_EDIT)
-                                }
+                                onAddButtonClick = ::openSongEditor
                             )
                         }
                     }
@@ -173,33 +133,11 @@ fun SearchPage(
                         contentPadding = PaddingValues(bottom = 96.dp),
                         state = viewModel.lazyListState
                     ) {
-                        items(state.results) { item ->
+                        items(state.results, key = { it.id }) { item ->
                             MobileSearchResultItem(
                                 item,
                                 onItemClick = viewModel::playSong,
-                                onAddButtonClick = {
-                                    songEditService.editSong(Song().apply {
-                                        id = item.id
-                                        audioSource = item.audioSource
-                                        title = item.title
-                                        author = item.author
-                                        lyricId = if (item.audioSource != AudioSource.BILI_BILI) item.id else ""
-                                        lyricSource = when(item.audioSource) {
-                                            AudioSource.BILI_BILI -> LyricSource.NONE
-                                            AudioSource.KU_GOU -> LyricSource.KU_GOU
-                                            AudioSource.NET_EASE -> LyricSource.NET_EASE
-                                        }
-                                        coverId = if (item.audioSource != AudioSource.BILI_BILI) item.id else ""
-                                        coverSource  = when(item.audioSource) {
-                                            AudioSource.BILI_BILI -> CoverSource.BILI_BILI
-                                            AudioSource.KU_GOU -> CoverSource.KU_GOU
-                                            AudioSource.NET_EASE -> CoverSource.NET_EASE
-                                        }
-                                        pic = item.pic
-                                        ts = System.currentTimeMillis()
-                                    }, "Search")
-                                    navigationService.navigate(Page.SONG_EDIT)
-                                }
+                                onAddButtonClick = ::openSongEditor
                             )
                         }
                     }

@@ -6,6 +6,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import uk.co.caprica.vlcj.factory.MediaPlayerFactory
 import uk.co.caprica.vlcj.player.base.*
 import com.zuoguan.bilimusickmp.models.AudioSource
@@ -32,7 +33,10 @@ class VlcAudioPlayService : AudioPlayService {
     private val _playMode = MutableStateFlow(PlayMode.SEQUENTIAL)
     override val playMode: StateFlow<PlayMode> = _playMode.asStateFlow()
 
-    override var playlist: List<TrackInfo> = emptyList()
+    @Volatile
+    private var _playlist: List<TrackInfo> = emptyList()
+    override val playlist: List<TrackInfo>
+        get() = _playlist
 
     private val _position = MutableStateFlow(0f)
     override val position: StateFlow<Float> = _position.asStateFlow()
@@ -94,25 +98,26 @@ class VlcAudioPlayService : AudioPlayService {
     // -------- API --------
 
     override suspend fun updatePlaylist(list: List<TrackInfo>) {
-        playlist = list
+        _playlist = list
     }
 
     override fun togglePlayMode() {
-        _playMode.value = when (_playMode.value) {
-            PlayMode.SEQUENTIAL -> PlayMode.SHUFFLE
-            PlayMode.SHUFFLE -> PlayMode.SINGLE_LOOP
-            PlayMode.SINGLE_LOOP -> PlayMode.SEQUENTIAL
+        _playMode.update { mode ->
+            when (mode) {
+                PlayMode.SEQUENTIAL -> PlayMode.SHUFFLE
+                PlayMode.SHUFFLE -> PlayMode.SINGLE_LOOP
+                PlayMode.SINGLE_LOOP -> PlayMode.SEQUENTIAL
+            }
         }
     }
 
     override suspend fun play(track: TrackInfo) {
-        if (mediaPlayer.status().isPlaying) {
-            mediaPlayer.controls().stop()
-        }
-
-        _currentTrack.value = track
-
         val url = track.urlProvider()
+
+        _position.value = 0f
+        _time.value = 0L
+        _duration.value = 0L
+        _currentTrack.value = track
 
         val options = when (track.audioSource) {
             AudioSource.BILI_BILI -> arrayOf(
@@ -143,6 +148,11 @@ class VlcAudioPlayService : AudioPlayService {
 
     override suspend fun stop() {
         mediaPlayer.controls().stop()
+        _currentTrack.value = null
+        _position.value = 0f
+        _time.value = 0L
+        _duration.value = 0L
+        _state.value = PlaybackState.Stopped
     }
 
     override suspend fun seek(position: Float) {
@@ -150,7 +160,7 @@ class VlcAudioPlayService : AudioPlayService {
     }
 
     override suspend fun seekMs(time: Long) {
-        val duration = duration.value
+        val duration = mediaPlayer.status().length().takeIf { it > 0 } ?: duration.value
         if (duration <= 0) return
 
         val percent = time.toFloat() / duration
@@ -158,54 +168,55 @@ class VlcAudioPlayService : AudioPlayService {
     }
 
     override suspend fun playNext() {
-        val current = currentTrack.value ?: return
-        if (playlist.isEmpty()) return
-
-        val next = when (_playMode.value) {
-
-            PlayMode.SINGLE_LOOP -> {
-                playlist.find { it.id == current.id }
-            }
-
-            PlayMode.SHUFFLE -> {
-                playlist.filterNot { it.id == current.id }
-                    .randomOrNull()
-                    ?: playlist.first()
-            }
-
-            PlayMode.SEQUENTIAL -> {
-                val index = playlist.indexOfFirst { it.id == current.id }
-                if (index == -1) playlist.first()
-                else playlist[(index + 1) % playlist.size]
-            }
-        } ?: return
-
+        val next = nextTrack() ?: return
         play(next)
     }
 
+    private fun nextTrack(): TrackInfo? {
+        val current = _currentTrack.value ?: return null
+        val list = playlist
+        if (list.isEmpty()) return null
+
+        return when (_playMode.value) {
+            PlayMode.SINGLE_LOOP -> list.find { it.id == current.id } ?: current
+
+            PlayMode.SHUFFLE -> list.filterNot { it.id == current.id }
+                .randomOrNull()
+                ?: current
+
+            PlayMode.SEQUENTIAL -> {
+                val index = list.indexOfFirst { it.id == current.id }
+                if (index == -1) list.first()
+                else list[(index + 1) % list.size]
+            }
+        }
+    }
+
     override suspend fun playPrevious() {
-        val current = currentTrack.value ?: return
-        if (playlist.isEmpty()) return
+        val current = _currentTrack.value ?: return
+        val list = playlist
+        if (list.isEmpty()) return
 
         val prev = when (_playMode.value) {
 
-            PlayMode.SINGLE_LOOP -> {
-                playlist.find { it.id == current.id }
-            }
+            PlayMode.SINGLE_LOOP -> list.find { it.id == current.id } ?: current
 
-            PlayMode.SHUFFLE -> {
-                playlist.filterNot { it.id == current.id }
-                    .randomOrNull()
-                    ?: playlist.first()
-            }
+            PlayMode.SHUFFLE -> list.filterNot { it.id == current.id }
+                .randomOrNull()
+                ?: current
 
             PlayMode.SEQUENTIAL -> {
-                val index = playlist.indexOfFirst { it.id == current.id }
-                if (index <= 0) playlist.last()
-                else playlist[index - 1]
+                val index = list.indexOfFirst { it.id == current.id }
+                if (index <= 0) list.last()
+                else list[index - 1]
             }
-        } ?: return
+        }
 
         play(prev)
+    }
+
+    override fun close() {
+        runCatching { mediaPlayer.release() }
+        runCatching { factory.release() }
     }
 }

@@ -4,6 +4,8 @@ import com.zuoguan.bilimusickmp.models.CoverSource
 import com.zuoguan.bilimusickmp.models.LyricSource
 import com.zuoguan.bilimusickmp.models.MetadataSource
 import com.zuoguan.bilimusickmp.models.Song
+import com.zuoguan.bilimusickmp.models.SongBaseInfo
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 
@@ -15,42 +17,53 @@ class SongMetadataService(
 ) {
     suspend fun resolve(song: Song): Song = coroutineScope {
         val songDeferred = async {
-            val songBaseInfo = extractSongBaseInfoService.extractInfo(song.title)
+            val songBaseInfo = try {
+                extractSongBaseInfoService.extractInfo(song.title)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                SongBaseInfo()
+            }
+
             val title = songBaseInfo.title.ifEmpty { song.title }
             val author = songBaseInfo.author
 
-            var songId = ""
+            var matchedSongId = ""
             var pic = song.pic
-            song.coverSource = CoverSource.BILI_BILI
+            var coverSource = CoverSource.BILI_BILI
             if (songBaseInfo.title.isNotEmpty() && songBaseInfo.author.isNotEmpty()) {
-                songId = kuGouService.getIdByTitleAndAuthor(title, author)
-                if (songId.isNotEmpty()){
-                    pic = kuGouService.getImageUrl(songId)
-                    song.coverSource = CoverSource.KU_GOU
+                matchedSongId = kuGouService.getIdByTitleAndAuthor(title, author)
+                if (matchedSongId.isNotEmpty()) {
+                    pic = try {
+                        kuGouService.getImageUrl(matchedSongId)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        song.pic
+                    }
+                    coverSource = CoverSource.KU_GOU
                 }
             }
 
-            Song().apply {
-                id = song.id
-                audioSource = song.audioSource
-                this.title = title
-                this.author = author
-                this.lyricSource = LyricSource.KU_GOU
-                this.lyricId = songId
-                this.coverSource = song.coverSource
-                this.coverId = songId
-                this.pic = pic
+            Song(
+                id = song.id,
+                audioSource = song.audioSource,
+                title = title,
+                author = author,
+                lyricSource = LyricSource.KU_GOU,
+                lyricId = matchedSongId,
+                coverSource = coverSource,
+                coverId = matchedSongId,
+                pic = pic,
                 ts = song.ts
-            }
+            )
         }
 
         val cidDeferred = async {
             biliService.getCid(song.id)
         }
 
-        songDeferred.await().apply {
-            cid = cidDeferred.await()
-        }
+        songDeferred.await().copy(cid = cidDeferred.await())
     }
 
     suspend fun resolveSongId(
@@ -58,21 +71,29 @@ class SongMetadataService(
         title: String,
         author: String
     ): String {
-        return when(source.label){
-            "酷狗音乐" -> kuGouService.getIdByTitleAndAuthor(title, author)
-            "网易云音乐" -> netEaseService.getIdByTitleAndAuthor(title, author)
+        if (title.isEmpty()) return ""
+        return when(source){
+            CoverSource.KU_GOU, LyricSource.KU_GOU -> kuGouService.getIdByTitleAndAuthor(title, author)
+            CoverSource.NET_EASE, LyricSource.NET_EASE -> netEaseService.getIdByTitleAndAuthor(title, author)
             else -> ""
         }
     }
 
-    fun resolvePic(
+    suspend fun resolvePic(
         source: CoverSource,
         id: String
     ): String{
-        return when(source){
-            CoverSource.KU_GOU -> kuGouService.getImageUrl(id)
-            CoverSource.NET_EASE -> netEaseService.getImageUrl(id)
-            else -> ""
+        if (id.isEmpty()) return ""
+        return try {
+            when(source){
+                CoverSource.KU_GOU -> kuGouService.getImageUrl(id)
+                CoverSource.NET_EASE -> netEaseService.getImageUrl(id)
+                else -> ""
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            ""
         }
     }
 }

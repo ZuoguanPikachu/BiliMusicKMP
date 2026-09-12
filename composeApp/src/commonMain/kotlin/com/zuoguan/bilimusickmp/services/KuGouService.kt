@@ -3,32 +3,57 @@ package com.zuoguan.bilimusickmp.services
 import com.zuoguan.bilimusickmp.models.AudioSource
 import com.zuoguan.bilimusickmp.models.LyricLine
 import com.zuoguan.bilimusickmp.models.SearchResult
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.*
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 import okhttp3.HttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.security.MessageDigest
+import java.util.concurrent.TimeUnit
 import kotlin.io.encoding.Base64
 
 class KuGouService {
-    private val client = OkHttpClient()
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(15, TimeUnit.SECONDS)
+        .build()
 
     private val defaultHeaders = mapOf(
         "User-Agent" to "IPhone-8990-searchSong",
         "UNI-UserAgent" to "iOS11.4-Phone8990-1009-0-WiFi"
     )
 
-    fun search(keyword: String, pageSize: Int = 10, page: Int = 1): List<SearchResult> {
+    private suspend fun getText(url: HttpUrl): String = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url(url)
+            .apply { defaultHeaders.forEach { (k, v) -> addHeader(k, v) } }
+            .build()
+
+        client.newCall(request).execute().use { it.body.string() }
+    }
+
+    private suspend fun getJson(url: HttpUrl): JsonObject =
+        Json.parseToJsonElement(getText(url)).jsonObject
+
+    suspend fun search(keyword: String, pageSize: Int = 10, page: Int = 1): List<SearchResult> {
         val url = HttpUrl.Builder()
             .scheme("http")
             .host("mobilecdn.kugou.com")
@@ -46,41 +71,44 @@ class KuGouService {
             .addQueryParameter("version", "8990")
             .build()
 
-        val request = Request.Builder()
-            .url(url)
-            .apply {
-                defaultHeaders.forEach { (k, v) -> addHeader(k, v) }
-            }
-            .build()
+        // 接口在无结果/被限流时不会返回 data.info，这里统一兜底为空列表
+        val songs = getJson(url)
+            .get("data")?.jsonObject
+            ?.get("info")?.jsonArray
+            ?: return emptyList()
 
-        client.newCall(request).execute().use { response ->
-            val body = response.body.string()
-            val json = Json.parseToJsonElement(body).jsonObject
+        // 封面需要逐首再查一次接口，串行会明显拖慢搜索，这里并发获取
+        return coroutineScope {
+            songs.map { item ->
+                async {
+                    val song = item.jsonObject
+                    val hash = song["hash"]?.jsonPrimitive?.contentOrNull ?: return@async null
 
-            val songs = json["data"]!!
-                .jsonObject["info"]!!
-                .jsonArray
+                    val pic = try {
+                        getImageUrl(hash)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        "" // 封面拿不到不影响搜索结果本身
+                    }
 
-            return songs.map { item ->
-                val song = item.jsonObject
-
-                val hash = song["hash"]!!.jsonPrimitive.content
-
-                SearchResult(
-                    id = hash,
-                    title = song["songname"]!!.jsonPrimitive.content,
-                    author = song["singername"]!!
-                        .jsonPrimitive.content
-                        .replace("、", " "),
-                    duration = formatDurationFromSeconds(song["duration"]!!.jsonPrimitive.int),
-                    pic = getImageUrl(hash),
-                    audioSource = AudioSource.KU_GOU
-                )
-            }
+                    SearchResult(
+                        id = hash,
+                        title = song["songname"]?.jsonPrimitive?.contentOrNull.orEmpty(),
+                        author = song["singername"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                            .replace("、", " "),
+                        duration = formatDurationFromSeconds(
+                            song["duration"]?.jsonPrimitive?.int ?: 0
+                        ),
+                        pic = pic,
+                        audioSource = AudioSource.KU_GOU
+                    )
+                }
+            }.awaitAll().filterNotNull()
         }
     }
 
-    fun getIdByTitleAndAuthor(title: String, author: String): String {
+    suspend fun getIdByTitleAndAuthor(title: String, author: String): String {
         val url = HttpUrl.Builder()
             .scheme("http")
             .host("mobilecdn.kugou.com")
@@ -98,39 +126,25 @@ class KuGouService {
             .addQueryParameter("version", "8990")
             .build()
 
-        val request = Request.Builder()
-            .url(url)
-            .apply {
-                defaultHeaders.forEach { (k, v) -> addHeader(k, v) }
-            }
-            .build()
+        val songs = getJson(url)
+            .get("data")?.jsonObject
+            ?.get("info")?.jsonArray
+            ?: return ""
 
-        client.newCall(request).execute().use { response ->
-            val body = response.body.string()
-            val json = Json.parseToJsonElement(body).jsonObject
-
-            val songs = json["data"]!!
-                .jsonObject["info"]!!
-                .jsonArray
-
-            for (item in songs) {
-                val song = item.jsonObject
-
-                if (song["songname"]!!.jsonPrimitive.content == title) {
-                    val artists =  song["singername"]!!.jsonPrimitive.content
-                    if (artists.contains(author))
-                    {
-                        return song["hash"]!!.jsonPrimitive.content
-                    }
+        for (item in songs) {
+            val song = item.jsonObject
+            if (song["songname"]?.jsonPrimitive?.contentOrNull == title) {
+                val artists = song["singername"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                if (artists.contains(author)) {
+                    return song["hash"]?.jsonPrimitive?.contentOrNull.orEmpty()
                 }
             }
-
         }
 
         return ""
     }
 
-    fun getAudioUrl(id: String): String {
+    suspend fun getAudioUrl(id: String): String {
         val payload = buildJsonObject {
             put("relate", 1)
             put("userid", "0")
@@ -153,28 +167,25 @@ class KuGouService {
         val requestBody = payload.toString()
             .toRequestBody("application/json".toMediaType())
 
-        val request = Request.Builder()
-            .url("http://media.store.kugou.com/v1/get_res_privilege")
-            .post(requestBody)
-            .apply {
-                defaultHeaders.forEach { (k, v) -> addHeader(k, v) }
-            }
-            .build()
+        val privilegeBody = withContext(Dispatchers.IO) {
+            val request = Request.Builder()
+                .url("http://media.store.kugou.com/v1/get_res_privilege")
+                .post(requestBody)
+                .apply { defaultHeaders.forEach { (k, v) -> addHeader(k, v) } }
+                .build()
 
-        val songHash: String
-
-        client.newCall(request).execute().use { response ->
-            val body = response.body.string()
-            val json = Json.parseToJsonElement(body).jsonObject
-
-            val data = json["data"]!!.jsonArray
-            val song = data[0]
-                .jsonObject["relate_goods"]!!
-                .jsonArray[0]
-                .jsonObject
-
-            songHash = song["hash"]!!.jsonPrimitive.content
+            client.newCall(request).execute().use { it.body.string() }
         }
+
+        val data = Json.parseToJsonElement(privilegeBody).jsonObject
+            .get("data")?.jsonArray
+            ?: throw IllegalStateException("酷狗返回数据异常")
+
+        val songHash = data.firstOrNull()
+            ?.jsonObject?.get("relate_goods")?.jsonArray
+            ?.firstOrNull()
+            ?.jsonObject?.get("hash")?.jsonPrimitive?.contentOrNull
+            ?: throw IllegalStateException("获取音频链接错误：未找到资源")
 
         val key = md5(songHash + "kgcloudv2")
 
@@ -190,31 +201,16 @@ class KuGouService {
             .addQueryParameter("version", "8990")
             .build()
 
-        val playRequest = Request.Builder()
-            .url(url)
-            .apply {
-                defaultHeaders.forEach { (k, v) -> addHeader(k, v) }
-            }
-            .build()
+        val json = getJson(url)
+        val urlElement = json["url"] ?: throw IllegalStateException("获取音频链接错误")
 
-        client.newCall(playRequest).execute().use { response ->
-            val body = response.body.string()
-            val json = Json.parseToJsonElement(body).jsonObject
-
-            val urlElement = json["url"] ?: throw IllegalStateException("获取音频链接错误")
-
-            return when {
-                urlElement is JsonArray -> {
-                    urlElement[0].jsonPrimitive.content
-                }
-                else -> {
-                    urlElement.jsonPrimitive.content
-                }
-            }
-        }
+        return when {
+            urlElement is JsonArray -> urlElement.firstOrNull()?.jsonPrimitive?.content
+            else -> urlElement.jsonPrimitive.content
+        } ?: throw IllegalStateException("获取音频链接错误")
     }
 
-    fun getImageUrl(id: String): String {
+    suspend fun getImageUrl(id: String): String {
         val url = HttpUrl.Builder()
             .scheme("http")
             .host("m.kugou.com")
@@ -224,22 +220,10 @@ class KuGouService {
             .addQueryParameter("from", "mkugou")
             .build()
 
-        val request = Request.Builder()
-            .url(url)
-            .apply {
-                defaultHeaders.forEach { (k, v) -> addHeader(k, v) }
-            }
-            .build()
-
-        client.newCall(request).execute().use { response ->
-            val body = response.body.string()
-            val json = Json.parseToJsonElement(body).jsonObject
-
-            return json["imgUrl"]!!.jsonPrimitive.content
-        }
+        return getJson(url)["imgUrl"]?.jsonPrimitive?.contentOrNull.orEmpty()
     }
 
-    fun getLyric(id: String): List<LyricLine> {
+    suspend fun getLyric(id: String): List<LyricLine> {
         val searchUrl = HttpUrl.Builder()
             .scheme("http")
             .host("krcs.kugou.com")
@@ -251,27 +235,14 @@ class KuGouService {
             .addQueryParameter("man", "yes")
             .build()
 
-        val searchRequest = Request.Builder()
-            .url(searchUrl)
-            .apply {
-                defaultHeaders.forEach { (k, v) -> addHeader(k, v) }
-            }
-            .build()
+        val candidate = getJson(searchUrl)["candidates"]
+            ?.jsonArray
+            ?.firstOrNull()
+            ?.jsonObject
+            ?: return emptyList()
 
-        val accessKey: String
-        val lyricId: String
-
-        client.newCall(searchRequest).execute().use { response ->
-            val body = response.body.string()
-            val json = Json.parseToJsonElement(body).jsonObject
-
-            val candidate = json["candidates"]!!
-                .jsonArray[0]
-                .jsonObject
-
-            accessKey = candidate["accesskey"]!!.jsonPrimitive.content
-            lyricId = candidate["id"]!!.jsonPrimitive.content
-        }
+        val accessKey = candidate["accesskey"]?.jsonPrimitive?.contentOrNull ?: return emptyList()
+        val lyricId = candidate["id"]?.jsonPrimitive?.contentOrNull ?: return emptyList()
 
         val lyricUrl = HttpUrl.Builder()
             .scheme("http")
@@ -285,26 +256,14 @@ class KuGouService {
             .addQueryParameter("ver", "1")
             .build()
 
-        val lyricRequest = Request.Builder()
-            .url(lyricUrl)
-            .apply {
-                defaultHeaders.forEach { (k, v) -> addHeader(k, v) }
-            }
-            .build()
+        val content = getJson(lyricUrl)["content"]?.jsonPrimitive?.contentOrNull ?: return emptyList()
 
-        client.newCall(lyricRequest).execute().use { response ->
-            val body = response.body.string()
-            val json = Json.parseToJsonElement(body).jsonObject
-
-            val content = json["content"]!!.jsonPrimitive.content
-
-            return parseLyrics(Base64.decode(content).decodeToString())
-        }
+        return parseLyrics(Base64.decode(content).decodeToString())
     }
 
     fun parseLyrics(lrcContent: String): List<LyricLine> {
         val result = mutableListOf<LyricLine>()
-        val regex = """\[(\d{2}):(\d{2}\.\d{2})]""".toRegex()
+        val regex = """\[(\d{2}):(\d{2}\.\d{2,3})]""".toRegex()
 
         lrcContent.lines().forEach { line ->
             val matches = regex.findAll(line).toList()
@@ -317,9 +276,10 @@ class KuGouService {
                 val minutes = match.groupValues[1].toLongOrNull() ?: 0L
                 val secondsParts = match.groupValues[2].split(".")
                 val seconds = secondsParts.getOrNull(0)?.toLongOrNull() ?: 0L
-                val millis = secondsParts.getOrNull(1)?.toLongOrNull() ?: 0L
+                val fraction = secondsParts.getOrNull(1)?.toLongOrNull() ?: 0L
+                val millis = if (secondsParts.getOrNull(1)?.length == 3) fraction else fraction * 10
 
-                val timeMs = minutes * 60_000 + seconds * 1_000 + millis * 10
+                val timeMs = minutes * 60_000 + seconds * 1_000 + millis
                 result.add(LyricLine(timeMs, text))
             }
         }
@@ -339,6 +299,4 @@ class KuGouService {
     private fun formatDurationFromSeconds(sec: Int): String {
         return "%02d:%02d".format(sec / 60, sec % 60)
     }
-
-
 }

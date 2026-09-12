@@ -2,6 +2,7 @@ package com.zuoguan.bilimusickmp.services
 
 import java.math.BigInteger
 import java.security.SecureRandom
+import java.util.concurrent.TimeUnit
 import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
@@ -11,12 +12,13 @@ import com.zuoguan.bilimusickmp.models.LyricLine
 import com.zuoguan.bilimusickmp.models.SearchResult
 import com.zuoguan.bilimusickmp.utils.NoRetryException
 import com.zuoguan.bilimusickmp.utils.retry
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.jsoup.Jsoup
 import java.net.URLEncoder
-import kotlin.collections.get
 import kotlin.io.encoding.Base64
 
 object WEAPIEncryptor {
@@ -87,26 +89,28 @@ object WEAPIEncryptor {
 }
 
 class NetEaseService {
-    private val client = OkHttpClient()
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(15, TimeUnit.SECONDS)
+        .build()
     private val gson = Gson()
 
-    private fun post(url: String, data: Map<String, String>): String {
-        val body = data.entries.joinToString("&") {
-            "${it.key}=${URLEncoder.encode(it.value, "UTF-8")}"
-        }.toRequestBody("application/x-www-form-urlencoded".toMediaType())
+    private suspend fun post(url: String, data: Map<String, String>): String =
+        withContext(Dispatchers.IO) {
+            val body = data.entries.joinToString("&") {
+                "${it.key}=${URLEncoder.encode(it.value, "UTF-8")}"
+            }.toRequestBody("application/x-www-form-urlencoded".toMediaType())
 
-        val request = Request.Builder()
-            .url(url)
-            .post(body)
-            .header("User-Agent", "Mozilla/5.0")
-            .header("Referer", "https://music.163.com/")
-            .header("Origin", "https://music.163.com")
-            .build()
+            val request = Request.Builder()
+                .url(url)
+                .post(body)
+                .header("User-Agent", "Mozilla/5.0")
+                .header("Referer", "https://music.163.com/")
+                .header("Origin", "https://music.163.com")
+                .build()
 
-        client.newCall(request).execute().use {
-            return it.body.string()
+            client.newCall(request).execute().use { it.body.string() }
         }
-    }
 
     suspend fun search(
         s: String,
@@ -115,13 +119,15 @@ class NetEaseService {
         limit: Int = 10
     ): List<SearchResult> {
         if (s.contains("163cn.tv")) {
-            val url = extractUrl(s)!!
-            val real = client.newCall(Request.Builder().url(url).build()).execute().request.url
-            return searchById(extractSongId(real.toString())!!)
+            val songId = resolveShareLinkId(s)
+                ?: throw NoRetryException("无法从分享链接解析歌曲 ID")
+            return searchById(songId)
         }
 
         if (s.contains("song?id=")) {
-            return searchById(extractSongId(s)!!)
+            val songId = extractSongId(s)
+                ?: throw NoRetryException("无法从链接解析歌曲 ID")
+            return searchById(songId)
         }
 
         if (s.matches(Regex("^\\d+$"))) {
@@ -140,28 +146,47 @@ class NetEaseService {
             val json = gson.fromJson(
                 post("https://music.163.com/weapi/cloudsearch/pc", encrypted),
                 Map::class.java
-            ) ?: throw Exception("网易云音乐搜索失败")
+            ) ?: throw NoRetryException("网易云音乐搜索失败")
 
-            val songs = ((json["result"] as Map<*, *>)["songs"] as List<Map<*, *>>)
+            val result = json["result"] as? Map<*, *>
+                ?: throw NoRetryException("网易云音乐搜索返回异常")
+            @Suppress("UNCHECKED_CAST")
+            val songs = result["songs"] as? List<Map<*, *>>
+                ?: throw NoRetryException("网易云音乐搜索返回异常")
 
-            return@retry songs.map {
-                val id = (it["id"] as Number).toLong().toString()
-                val title = it["name"].toString()
-                val author = (it["ar"] as List<Map<*, *>>).joinToString(" ") { a -> a["name"].toString() }
-                val duration = formatDurationFromMillis((it["dt"] as Number).toInt())
-                val imageUrl = getImageUrl(id = id)
+            return@retry songs.mapNotNull { song ->
+                val id = (song["id"] as? Number)?.toLong()?.toString() ?: return@mapNotNull null
+                val title = song["name"]?.toString().orEmpty()
+                val author = (song["ar"] as? List<*>)
+                    ?.joinToString(" ") { (it as? Map<*, *>)?.get("name")?.toString().orEmpty() }
+                    .orEmpty()
+                val duration = (song["dt"] as? Number)?.toInt()?.let { formatDurationFromMillis(it) } ?: "00:00"
+                // 搜索结果里自带专辑封面，不必为每首歌再发一次 HTTP 请求
+                val imageUrl = (song["al"] as? Map<*, *>)?.get("picUrl")?.toString().orEmpty()
+
                 SearchResult(id, title, author, imageUrl, duration, AudioSource.NET_EASE)
             }
         }
     }
 
+    /** 解析 163cn.tv 短链，拿到真实 URL 中的歌曲 id。 */
+    private suspend fun resolveShareLinkId(text: String): String? {
+        val url = extractUrl(text) ?: return null
+        val real = withContext(Dispatchers.IO) {
+            client.newCall(Request.Builder().url(url).build()).execute().use { it.request.url.toString() }
+        }
+        return extractSongId(real)
+    }
+
     suspend fun searchById(id: String): List<SearchResult> {
         return retry(times = 5) {
-            val html = client.newCall(
-                Request.Builder()
-                    .url("https://music.163.com/song?id=$id")
-                    .build()
-            ).execute().body.string()
+            val html = withContext(Dispatchers.IO) {
+                client.newCall(
+                    Request.Builder()
+                        .url("https://music.163.com/song?id=$id")
+                        .build()
+                ).execute().use { it.body.string() }
+            }
 
             val doc = Jsoup.parse(html)
             val title = doc.select("meta[property=og:title]").attr("content")
@@ -169,7 +194,7 @@ class NetEaseService {
             val duration = formatDurationFromSeconds(
                 doc.select("meta[property=music:duration]").attr("content")
             )
-            val image = getImageUrl(id = id)
+            val image = doc.select("meta[property=og:image]").attr("content")
 
             return@retry listOf(SearchResult(id, title, artist, image, duration, AudioSource.NET_EASE))
         }
@@ -183,13 +208,17 @@ class NetEaseService {
             val json = gson.fromJson(
                 resp,
                 Map::class.java
-            ) ?: throw Exception("获取音频链接错误")
+            ) ?: throw NoRetryException("获取音频链接错误")
 
-            val urlObj = ((json["data"] as List<*>)[0] as Map<*, *>)["url"]
+            val data = json["data"] as? List<*>
+            if (data.isNullOrEmpty()) {
+                throw NoRetryException("获取音频链接错误：返回数据为空")
+            }
+
+            val urlObj = (data[0] as? Map<*, *>)?.get("url")
                 ?: throw NoRetryException("可能是VIP歌曲，无法获取音频链接")
-            val url = urlObj.toString()
 
-            return@retry url
+            urlObj.toString()
         }
     }
 
@@ -207,14 +236,16 @@ class NetEaseService {
             val json = gson.fromJson(
                 post("https://music.163.com/weapi/cloudsearch/pc", encrypted),
                 Map::class.java
-            ) ?: throw Exception("自动搜索失败")
+            ) ?: throw NoRetryException("自动搜索失败")
 
-            val songs = ((json["result"] as Map<*, *>)["songs"] as List<Map<*, *>>)
+            val result = json["result"] as? Map<*, *> ?: return@retry ""
+            @Suppress("UNCHECKED_CAST")
+            val songs = result["songs"] as? List<Map<*, *>> ?: return@retry ""
             for (song in songs) {
                 if (song["name"] == title) {
-                    val artists = song["ar"] as List<Map<*, *>>
-                    if (artists.any { it["name"] == author }) {
-                        return@retry (song["id"] as Number).toLong().toString()
+                    val artists = song["ar"] as? List<*> ?: continue
+                    if (artists.any { (it as? Map<*, *>)?.get("name") == author }) {
+                        return@retry (song["id"] as? Number)?.toLong()?.toString().orEmpty()
                     }
                 }
             }
@@ -222,14 +253,12 @@ class NetEaseService {
         }
     }
 
-    fun getImageUrl(id: String): String {
+    suspend fun getImageUrl(id: String): String = withContext(Dispatchers.IO) {
         val html = client.newCall(
             Request.Builder().url("https://music.163.com/song?id=$id").build()
-        ).execute().body.string()
+        ).execute().use { it.body.string() }
 
-        val doc = Jsoup.parse(html)
-        val img = doc.select("meta[property=og:image]").attr("content")
-        return img
+        Jsoup.parse(html).select("meta[property=og:image]").attr("content")
     }
 
     suspend fun getLyric(

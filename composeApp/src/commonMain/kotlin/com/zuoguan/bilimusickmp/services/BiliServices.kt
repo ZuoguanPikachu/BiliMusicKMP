@@ -13,11 +13,14 @@ import org.json.JSONObject
 import org.jsoup.Jsoup
 import java.net.URLEncoder
 import java.security.MessageDigest
+import java.util.concurrent.TimeUnit
 
 class BiliService {
     private val cookieJar = SimpleCookieJar()
     private val client = OkHttpClient.Builder()
         .cookieJar(cookieJar)
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(15, TimeUnit.SECONDS)
         .addInterceptor {
             val req = it.request().newBuilder()
                 .header("Referer", "https://www.bilibili.com/")
@@ -54,9 +57,7 @@ class BiliService {
             if (wbiInitialized) return
 
             try {
-                withContext(Dispatchers.IO) {
-                    refreshWbiKeys()
-                }
+                refreshWbiKeys()
                 wbiInitialized = true
             } catch (e: Exception) {
                 throw Exception("无法获取WBI签名密钥: ${e.message}", e)
@@ -64,7 +65,7 @@ class BiliService {
         }
     }
 
-    private fun refreshWbiKeys() {
+    private suspend fun refreshWbiKeys() {
         val json = get("https://api.bilibili.com/x/web-interface/nav")
         val data = JSONObject(json).getJSONObject("data").getJSONObject("wbi_img")
 
@@ -72,8 +73,10 @@ class BiliService {
         subKey = data.getString("sub_url").substringAfterLast("/").substringBefore(".")
     }
 
-    private fun getMixinKey(orig: String): String =
-        mixinKeyEncTab.joinToString("") { orig[it].toString() }.substring(0, 32)
+    private fun getMixinKey(orig: String): String {
+        require(orig.length > mixinKeyEncTab.max()) { "WBI 密钥长度异常: ${orig.length}" }
+        return mixinKeyEncTab.joinToString("") { orig[it].toString() }.substring(0, 32)
+    }
 
     private fun encWbi(params: MutableMap<String, String>): Map<String, String> {
         if (imgKey.isEmpty() || subKey.isEmpty()) {
@@ -205,14 +208,15 @@ class BiliService {
     }
     // ---------------- HTTP ----------------
 
-    private fun get(url: String): String =
+    private suspend fun get(url: String): String = withContext(Dispatchers.IO) {
         client.newCall(Request.Builder().url(url).build())
             .execute().use { it.body.string() }
+    }
 
-    private fun resolveRedirectUrl(url: String): String {
+    private suspend fun resolveRedirectUrl(url: String): String = withContext(Dispatchers.IO) {
         val request = Request.Builder().url(url).build()
         client.newCall(request).execute().use { response ->
-            return response.request.url.toString()
+            response.request.url.toString()
         }
     }
 
@@ -225,8 +229,13 @@ class BiliService {
 
     private fun formatTime(time: String): String {
         val parts = time.split(":")
-        if (parts.size != 2) return "00:00"
-        return parts[0].padStart(2, '0') + ":" + parts[1].padStart(2, '0')
+        return when (parts.size) {
+            2 -> parts[0].padStart(2, '0') + ":" + parts[1].padStart(2, '0')
+            3 -> parts[0].padStart(2, '0') + ":" +
+                    parts[1].padStart(2, '0') + ":" +
+                    parts[2].padStart(2, '0')
+            else -> "--:--"
+        }
     }
 
     private fun extractBvId(url: String): String? {

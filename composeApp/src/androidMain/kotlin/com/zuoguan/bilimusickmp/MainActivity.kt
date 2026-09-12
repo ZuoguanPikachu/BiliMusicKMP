@@ -1,14 +1,12 @@
 package com.zuoguan.bilimusickmp
 
 import android.Manifest
-import android.content.ComponentName
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.annotation.RequiresApi
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutLinearInEasing
@@ -55,20 +53,20 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import androidx.media3.session.MediaController
-import androidx.media3.session.SessionToken
-import com.zuoguan.bilimusickmp.services.MusicPlaybackService
 import com.zuoguan.bilimusickmp.services.NavigationService
+import com.zuoguan.bilimusickmp.vm.PlaylistPageViewModel
+import com.zuoguan.bilimusickmp.vm.SearchPageViewModel
+import com.zuoguan.bilimusickmp.vm.SongEditorViewModel
 import com.zuoguan.bilimusickmp.ui.LyricsPage
 import com.zuoguan.bilimusickmp.ui.PlayBar
 import com.zuoguan.bilimusickmp.ui.PlaylistPage
 import com.zuoguan.bilimusickmp.ui.SearchPage
 import com.zuoguan.bilimusickmp.ui.SettingsPage
+import com.zuoguan.bilimusickmp.ui.SnackbarEvents
 import com.zuoguan.bilimusickmp.ui.SongEditPage
 import org.koin.compose.koinInject
 
 class MainActivity : ComponentActivity() {
-    @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
@@ -79,9 +77,6 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        val sessionToken = SessionToken(this, ComponentName(this, MusicPlaybackService::class.java))
-        MediaController.Builder(this, sessionToken).buildAsync()
-
         setContent {
             App()
         }
@@ -91,12 +86,19 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun App(
-    navigationService: NavigationService = koinInject()
+    navigationService: NavigationService = koinInject(),
+    playlistViewModel: PlaylistPageViewModel = koinInject(),
+    searchViewModel: SearchPageViewModel = koinInject(),
+    songEditorViewModel: SongEditorViewModel = koinInject()
 ) {
     val snackBarHostState = remember { SnackbarHostState() }
     val currentPage = navigationService.currentPage
 
     CompositionLocalProvider(LocalSnackBarHostState provides snackBarHostState) {
+        SnackbarEvents(playlistViewModel.uiEvents)
+        SnackbarEvents(searchViewModel.uiEvents)
+        SnackbarEvents(songEditorViewModel.uiEvents)
+
         Scaffold(
             snackbarHost = { SnackbarHost(snackBarHostState) },
             bottomBar = {

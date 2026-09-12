@@ -2,7 +2,6 @@ package com.zuoguan.bilimusickmp.ui
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -24,13 +23,11 @@ fun LyricLineItem(
     onClick: () -> Unit
 ) {
     Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(IntrinsicSize.Min),
+        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
         onClick = onClick,
     ){
         Box(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+            modifier = Modifier.padding(horizontal = 16.dp),
             contentAlignment = Alignment.Center
         ){
             Text(

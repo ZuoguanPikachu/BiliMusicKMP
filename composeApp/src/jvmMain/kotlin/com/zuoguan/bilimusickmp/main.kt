@@ -15,17 +15,28 @@ import bilimusickmp.composeapp.generated.resources.Res
 import bilimusickmp.composeapp.generated.resources.bili_music
 import com.zuoguan.bilimusickmp.di.appModule
 import com.zuoguan.bilimusickmp.models.Page
+import com.zuoguan.bilimusickmp.services.AudioPlayService
 import com.zuoguan.bilimusickmp.ui.*
 import com.zuoguan.bilimusickmp.utils.getAppConfigDir
+import com.zuoguan.bilimusickmp.vm.PlaylistPageViewModel
+import com.zuoguan.bilimusickmp.vm.SearchPageViewModel
+import com.zuoguan.bilimusickmp.vm.SongEditorViewModel
 import kotbase.CouchbaseLite
 import org.jetbrains.compose.resources.painterResource
+import org.koin.compose.koinInject
+import org.koin.core.Koin
 import org.koin.core.context.startKoin
 import uk.co.caprica.vlcj.factory.discovery.NativeDiscovery
 import java.io.File
 
+private var koinRef: Koin? = null
+
+private fun releaseAudioPlayService() {
+    runCatching { koinRef?.get<AudioPlayService>()?.close() }
+}
 
 fun main() {
-    NativeDiscovery().discover()
+    val vlcFound = NativeDiscovery().discover()
     val cfgDir = getAppConfigDir()
 
     CouchbaseLite.init(debug = false,
@@ -34,28 +45,66 @@ fun main() {
         ).also { it.mkdirs() }
     )
 
-    startKoin {
+    koinRef = startKoin {
         modules(appModule)
-    }
+    }.koin
+
+    Runtime.getRuntime().addShutdownHook(Thread { releaseAudioPlayService() })
 
     application {
         Window(
-            onCloseRequest = ::exitApplication,
+            onCloseRequest = {
+                releaseAudioPlayService()
+                exitApplication()
+            },
             title = "BiliMusic",
             state = rememberWindowState(width = 1400.dp, height = 900.dp),
             icon = painterResource(Res.drawable.bili_music)
         ) {
-            MaterialTheme { App() }
+            MaterialTheme {
+                if (!vlcFound) {
+                    VlcMissingDialog()
+                }
+                App()
+            }
         }
     }
 }
 
 @Composable
-fun App() {
+private fun VlcMissingDialog() {
+    var dismissed by remember { mutableStateOf(false) }
+    if (dismissed) return
+
+    AlertDialog(
+        onDismissRequest = { dismissed = true },
+        title = { Text("未找到 VLC") },
+        text = {
+            Text(
+                "未检测到 VLC media player，无法播放音频。\n" +
+                    "请安装 VLC（https://www.videolan.org/vlc/）后重启应用。"
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = { dismissed = true }) { Text("知道了") }
+        }
+    )
+}
+
+@Composable
+fun App(
+    playlistViewModel: PlaylistPageViewModel = koinInject(),
+    searchViewModel: SearchPageViewModel = koinInject(),
+    songEditorViewModel: SongEditorViewModel = koinInject(),
+) {
     val snackBarHostState = remember { SnackbarHostState() }
     var currentPage by remember { mutableStateOf(Page.PLAYLIST) }
 
     CompositionLocalProvider(LocalSnackBarHostState provides snackBarHostState) {
+        SnackbarEvents(playlistViewModel.uiEvents)
+        SnackbarEvents(searchViewModel.uiEvents)
+        SnackbarEvents(songEditorViewModel.uiEvents)
+
         Box(modifier = Modifier.fillMaxSize()) {
 
             Column(modifier = Modifier.fillMaxSize()) {

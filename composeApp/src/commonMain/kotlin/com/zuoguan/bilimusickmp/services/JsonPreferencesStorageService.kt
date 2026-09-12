@@ -41,6 +41,7 @@ class JsonPreferencesStorageService(
 
     private val _map = MutableStateFlow<Map<String, String>>(emptyMap())
 
+    @Volatile
     private var syncUpdatedAt = 0L
 
     init {
@@ -48,11 +49,15 @@ class JsonPreferencesStorageService(
     }
 
     private fun load() {
-        val raw = readTextFile(filePath) ?: return
-        runCatching {
+        val raw = readTextFile(filePath) ?: // 文件不存在或不可读：保持空状态，交给下一次写入重建
+        return
+        try {
             val parsed = json.decodeFromString<PrefsFileContent>(raw)
             _map.value = parsed.values
             syncUpdatedAt = parsed.syncUpdatedAt
+        } catch (e: Exception) {
+            // 解析失败时保留原始文件（下次写入前不会覆盖），并打印以便排查
+            println("偏好文件解析失败，已忽略: ${e.message}")
         }
     }
 
@@ -60,14 +65,18 @@ class JsonPreferencesStorageService(
         writeTextFileAtomic(filePath, json.encodeToString(PrefsFileContent(_map.value, syncUpdatedAt)))
     }
 
-    private suspend fun setValue(key: String, value: String?, bumpSync: Boolean) = mutex.withLock {
+    /** 只有同步白名单内的键（且不带 local. 前缀）才推进同步版本号。 */
+    private fun isSyncable(key: String) =
+        key in SyncKeys.PREF_KEYS && !key.startsWith(SyncKeys.LOCAL_KEY_PREFIX)
+
+    private suspend fun setValue(key: String, value: String?) = mutex.withLock {
         val old = _map.value[key]
         if (old == value) return@withLock // 无变化：不写盘、不推进同步版本
         val newValue = _map.value.toMutableMap().apply {
             if (value == null) remove(key) else put(key, value)
         }
         _map.value = newValue
-        if (bumpSync && key in SyncKeys.PREF_KEYS) {
+        if (isSyncable(key)) {
             syncUpdatedAt = maxOf(currentTimeMillis(), syncUpdatedAt + 1)
         }
         persist()
@@ -80,7 +89,7 @@ class JsonPreferencesStorageService(
     override suspend fun getString(key: String): String? = _map.value[key]
 
     override suspend fun putString(key: String, value: String?) {
-        setValue(key, value, bumpSync = true)
+        setValue(key, value)
     }
 
     // ---------- 数字 ----------
@@ -92,7 +101,7 @@ class JsonPreferencesStorageService(
         _map.value[key]?.toLongOrNull() ?: default
 
     override suspend fun putLong(key: String, value: Long) {
-        setValue(key, value.toString(), bumpSync = false)
+        setValue(key, value.toString())
     }
 
     // ---------- 布尔 ----------
@@ -104,7 +113,7 @@ class JsonPreferencesStorageService(
         _map.value[key]?.toBooleanStrictOrNull() ?: default
 
     override suspend fun putBoolean(key: String, value: Boolean) {
-        setValue(key, value.toString(), bumpSync = false)
+        setValue(key, value.toString())
     }
 
     // ---------- 云同步支持 ----------
@@ -114,7 +123,7 @@ class JsonPreferencesStorageService(
     override suspend fun syncablePayload(): SyncPrefs = mutex.withLock {
         SyncPrefs(
             updatedAt = syncUpdatedAt,
-            values = _map.value.filterKeys { it in SyncKeys.PREF_KEYS }
+            values = _map.value.filterKeys { isSyncable(it) }
         )
     }
 
@@ -122,7 +131,7 @@ class JsonPreferencesStorageService(
         if (prefs.updatedAt < syncUpdatedAt) return@withLock Long.MIN_VALUE
         val newMap = _map.value.toMutableMap()
         for ((k, v) in prefs.values) {
-            if (k in SyncKeys.PREF_KEYS) {
+            if (isSyncable(k)) {
                 newMap[k] = v
             }
         }

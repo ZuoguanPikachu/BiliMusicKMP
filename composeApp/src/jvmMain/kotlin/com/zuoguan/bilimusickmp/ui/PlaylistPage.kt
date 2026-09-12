@@ -19,26 +19,24 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.kamel.core.Resource
 import io.kamel.image.asyncPainterResource
-import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
-import com.zuoguan.bilimusickmp.LocalSnackBarHostState
 import com.zuoguan.bilimusickmp.models.PlaySource
 import com.zuoguan.bilimusickmp.models.Song
-import com.zuoguan.bilimusickmp.utils.UiEvent
 import com.zuoguan.bilimusickmp.utils.convertImageUrl
 import com.zuoguan.bilimusickmp.vm.PlaylistPageViewModel
+import com.zuoguan.bilimusickmp.vm.SongEditorViewModel
 import com.zuoguan.bilimusickmp.vm.TagFilterMode
 import kotlin.text.contains
 
 @Composable
 fun PlaylistPage(
-    viewModel: PlaylistPageViewModel = koinInject()
+    viewModel: PlaylistPageViewModel = koinInject(),
+    songEditorViewModel: SongEditorViewModel = koinInject(),
 ) {
     val state by viewModel.uiState.collectAsState()
-    val coroutineScope = rememberCoroutineScope()
-    val snackBarHostState = LocalSnackBarHostState.current
+    val editorState by songEditorViewModel.uiState.collectAsState()
 
     val hapticFeedback = LocalHapticFeedback.current
     val lazyListState = viewModel.lazyListState
@@ -48,23 +46,6 @@ fun PlaylistPage(
             viewModel.moveSong(from.index, to.index)
         }
     )
-
-    LaunchedEffect(Unit) {
-        viewModel.uiEvents.collect { event ->
-            when (event) {
-                is UiEvent.ShowSnackBar -> {
-                    coroutineScope.launch {
-                        snackBarHostState.showSnackbar(
-                            message = event.message,
-                            actionLabel = event.actionLabel,
-                            duration = event.duration,
-                            withDismissAction = true,
-                        )
-                    }
-                }
-            }
-        }
-    }
 
     Column {
         if (state.allTags.isNotEmpty()){
@@ -102,7 +83,7 @@ fun PlaylistPage(
                         isPlaying = (it.id == state.currentTrack?.id && state.currentTrack?.playSource == PlaySource.PLAYLIST),
                         playSong = viewModel::playSong,
                         requestDelete = viewModel::requestDelete,
-                        requestEdit = viewModel::requestEdit
+                        requestEdit = songEditorViewModel::openForEdit
                     )
                 }
             }
@@ -110,21 +91,23 @@ fun PlaylistPage(
     }
 
     if (state.showDeleteDialog) {
-        DeleteSongConfirmDialog(
-            song = state.songToHandle!!,
-            onConfirm = viewModel::confirmDelete,
-            onDismiss = viewModel::cancelDelete
-        )
+        state.songToHandle?.let { song ->
+            DeleteSongConfirmDialog(
+                song = song,
+                onConfirm = viewModel::confirmDelete,
+                onDismiss = viewModel::cancelDelete
+            )
+        }
     }
 
-    if (state.showEditDialog) {
+    if (editorState.isOpen) {
         SongInfoEditDialog(
-            "编辑歌曲",
-            false,
-            state.allTags,
-            state.songToHandle!!,
-            viewModel::confirmEdit,
-            viewModel::cancelEdit
+            state = editorState,
+            onEdit = songEditorViewModel::edit,
+            onResolveLyricId = songEditorViewModel::resolveLyricId,
+            onResolveCover = songEditorViewModel::resolveCover,
+            onConfirm = songEditorViewModel::save,
+            onDismiss = songEditorViewModel::dismiss,
         )
     }
 }

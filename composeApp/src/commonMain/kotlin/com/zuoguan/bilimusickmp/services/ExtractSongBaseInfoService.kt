@@ -4,7 +4,9 @@ import com.google.gson.Gson
 import com.google.gson.JsonObject
 import com.zuoguan.bilimusickmp.models.LLMConfig
 import com.zuoguan.bilimusickmp.models.SongBaseInfo
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -62,20 +64,29 @@ class ExtractSongBaseInfoService(
             .addHeader("Authorization", "Bearer $apiKey")
             .build()
 
-        val response = httpClient.newCall(request).execute()
+        val response = withContext(Dispatchers.IO) { httpClient.newCall(request).execute() }
         response.use {
             if (!it.isSuccessful) {
                 return SongBaseInfo()
             }
 
-            val json = gson.fromJson(it.body.string(), JsonObject::class.java)
-            val content = json["choices"]
-                .asJsonArray[0]
-                .asJsonObject["message"]
-                .asJsonObject["content"]
-                .asString
+            val content = try {
+                gson.fromJson(it.body.string(), JsonObject::class.java)
+                    ?.getAsJsonArray("choices")
+                    ?.firstOrNull()
+                    ?.asJsonObject
+                    ?.getAsJsonObject("message")
+                    ?.get("content")
+                    ?.asString
+            } catch (e: Exception) {
+                null
+            } ?: return SongBaseInfo()
 
-            return gson.fromJson(content, SongBaseInfo::class.java) ?: SongBaseInfo()
+            return try {
+                gson.fromJson(content, SongBaseInfo::class.java) ?: SongBaseInfo()
+            } catch (e: Exception) {
+                SongBaseInfo()
+            }
         }
     }
 }
