@@ -1,5 +1,11 @@
 package com.zuoguan.bilimusickmp.models
 
+/**
+ * 封面的来源平台。
+ *
+ * 实现 [MetadataSource] 是为了让「无封面」与「某平台封面」共用同一套取值与判空逻辑；
+ * [NONE] 表示歌曲未设置封面来源。
+ */
 enum class CoverSource : MetadataSource  {
     NONE,
     KU_GOU,

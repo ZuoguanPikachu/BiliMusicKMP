@@ -17,6 +17,11 @@ import com.zuoguan.bilimusickmp.vm.SearchPageViewModel
 import com.zuoguan.bilimusickmp.vm.SongEditorViewModel
 
 
+/**
+ * 搜索页：顶部搜索框（左侧切换音源），下方是自适应列数的结果网格。
+ *
+ * 结果列表更新后回到顶部；点击结果直接播放，点加号则新建歌曲会话。
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchPage(
@@ -124,7 +129,7 @@ fun SearchPage(
                         PcSearchResultItem(
                             item,
                             onItemClick = viewModel::playSong,
-                            // 与 Android 完全一致：搜索结果 → 新建歌曲会话
+                            // 点加号：用该搜索结果新建歌曲编辑会话
                             onAddButtonClick = { songEditorViewModel.openForCreate(it.toSong()) }
                         )
                     }

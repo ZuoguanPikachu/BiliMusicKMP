@@ -13,6 +13,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+/**
+ * 播放条状态。
+ *
+ * 把 [AudioPlayService] 的播放状态、当前曲目、进度与播放模式映射给 UI，
+ * 并把播放条上的按钮操作转成对播放服务的调用。
+ */
 class PlayBarViewModel(
     private val audioPlayService: AudioPlayService
 ) {
@@ -78,6 +84,12 @@ class PlayBarViewModel(
         }
     }
 
+    /**
+     * 播放/暂停切换。
+     *
+     * 已停止、播放结束或出错时从当前曲目重新开始播放；播放失败则落到
+     * [PlaybackState.Error]，由 UI 呈现。
+     */
     fun togglePlayPause() {
         val state = _uiState.value
         when (state.playbackState) {
@@ -100,6 +112,7 @@ class PlayBarViewModel(
         }
     }
 
+    /** 按进度比例跳转，[p] 为 0..1 的播放进度。 */
     fun seek(p: Float) {
         scope.launch {
             audioPlayService.seek(p)

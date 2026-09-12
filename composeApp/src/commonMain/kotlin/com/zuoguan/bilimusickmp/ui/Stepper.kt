@@ -14,6 +14,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
+/**
+ * 数值步进器：加减按钮按 [step] 调整 [value]，结果限制在 [range] 内。
+ */
 @Composable
 fun Stepper(
     value: Int,
@@ -24,6 +27,7 @@ fun Stepper(
     enabled: Boolean = true
 ) {
     fun updateValue(current: Int, delta: Long) {
+        // 用 Long 运算并夹到 range，避免在 Int 边界附近步进时溢出
         val next = (current.toLong() + delta).coerceIn(
             range.first.toLong(),
             range.last.toLong()

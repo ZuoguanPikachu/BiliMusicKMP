@@ -8,8 +8,12 @@ import kotlinx.serialization.encodeToString
 import java.io.File
 
 /**
- * 迁移 v1 桌面的偏好数据（llm_config.json → preferences.json）。
- * 仅在 preferences.json 尚不存在时执行一次；旧文件保留为 .bak。
+ * 把 v1 桌面版的 LLM 配置从 llm_config.json 迁移到统一偏好存储 preferences.json。
+ *
+ * 一次性迁移：只在 preferences.json 不存在且 llm_config.json 存在时执行，因此最多生效一次。
+ *
+ * - 读出源文件里的 apiKey / baseUrl / modelName，写成新的偏好格式
+ * - 源文件重命名为 llm_config.json.bak 保留
  *
  * 整个过程被 try/catch 包住：这个函数在 Koin 的 single 工厂里执行，
  * 任何异常都会导致依赖注入失败、应用起不来，而迁移失败本身并不致命。
@@ -36,6 +40,7 @@ fun migrateLegacyJvmPreferences() {
         )
         writeTextFileAtomic(target.absolutePath, content)
 
+        // 旧文件改名保留为 .bak；改名失败只提示，新偏好已写好，不影响使用
         if (!legacy.renameTo(File(cfgDir, "llm_config.json.bak"))) {
             println("旧配置重命名失败（不影响使用）: ${legacy.absolutePath}")
         }

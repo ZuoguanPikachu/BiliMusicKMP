@@ -1,5 +1,11 @@
 package com.zuoguan.bilimusickmp.models
 
+/**
+ * 歌词的来源平台。
+ *
+ * 实现 [MetadataSource] 是为了让「无歌词」与「某平台歌词」共用同一套取值与判空逻辑；
+ * [NONE] 表示歌曲未设置歌词来源。
+ */
 enum class LyricSource : MetadataSource {
     NONE,
     KU_GOU,

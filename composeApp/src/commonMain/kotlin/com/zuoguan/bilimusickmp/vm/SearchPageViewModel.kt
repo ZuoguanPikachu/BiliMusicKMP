@@ -28,8 +28,7 @@ import kotlinx.coroutines.launch
 /**
  * 搜索页状态。
  *
- * 只负责"搜索"这一件事：歌曲的新建/编辑全部由 [SongEditorViewModel] 承担，
- * 因此这里不再持有 add 对话框相关的状态。
+ * 只负责"搜索"这一件事：歌曲的新建/编辑全部由 [SongEditorViewModel] 承担。
  */
 class SearchPageViewModel(
     private val biliService: BiliService,
@@ -39,15 +38,19 @@ class SearchPageViewModel(
 ) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    /** 手机端列表的滚动状态。 */
     val lazyListState = LazyListState()
+    /** 平板/PC 端网格的滚动状态。 */
     val lazyGridState = LazyGridState()
 
     private val _uiState = MutableStateFlow(SearchUiState())
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
 
+    // 当前进行中的搜索；新搜索会先取消它
     private var searchJob: Job? = null
 
     private val _uiEvents = Channel<UiEvent>(Channel.BUFFERED)
+    /** 一次性 UI 事件（如播放失败提示）。 */
     val uiEvents = _uiEvents.receiveAsFlow()
 
     fun onKeywordChange(value: String) {
@@ -60,6 +63,11 @@ class SearchPageViewModel(
         }
     }
 
+    /**
+     * 按当前关键词与音源搜索。
+     *
+     * 新搜索会先取消上一次未完成的请求，避免旧结果覆盖新结果。
+     */
     fun search() {
         val state = _uiState.value
         val keyword = state.keyword.trim()
@@ -106,6 +114,7 @@ class SearchPageViewModel(
         }
     }
 
+    /** 直接播放某条搜索结果；音频地址与歌词在播放时按来源解析。 */
     fun playSong(item: SearchResult) {
         val track = TrackInfo(
             id = item.id,
@@ -132,6 +141,7 @@ class SearchPageViewModel(
             },
             lyricsProvider = {
                 when (item.audioSource) {
+                    // B 站搜索结果没有歌词 ID，播放时先不带歌词
                     AudioSource.BILI_BILI -> {emptyList()}
 
                     AudioSource.NET_EASE -> {

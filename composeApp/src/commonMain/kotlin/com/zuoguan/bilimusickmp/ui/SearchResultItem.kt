@@ -41,6 +41,7 @@ import com.zuoguan.bilimusickmp.utils.convertImageUrl
 import io.kamel.core.Resource
 import io.kamel.image.asyncPainterResource
 
+/** 手机端搜索结果条目：整行可点播放，右侧加号进入新建。 */
 @Composable
 fun MobileSearchResultItem(
     item: SearchResult,
@@ -143,6 +144,7 @@ fun MobileSearchResultItem(
     }
 }
 
+/** 平板/PC 端搜索结果卡片：整卡可点播放，加号进入新建。 */
 @Composable
 fun PcSearchResultItem(
     item: SearchResult,

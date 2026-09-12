@@ -7,6 +7,11 @@ import com.zuoguan.bilimusickmp.LocalSnackBarHostState
 import com.zuoguan.bilimusickmp.utils.UiEvent
 import kotlinx.coroutines.flow.Flow
 
+/**
+ * 把 VM 的一次性 UI 事件流消费成 Snackbar 提示。
+ *
+ * 以 [eventFlow] 作为 key，事件流被替换时自动重新收集。
+ */
 @Composable
 fun SnackbarEvents(eventFlow: Flow<UiEvent>) {
     val hostState: SnackbarHostState = LocalSnackBarHostState.current

@@ -5,8 +5,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 
 /**
- * LLM 配置相关的便捷扩展。未来新增偏好项时，在对应文件里追加扩展即可，
- * 不需要改动 [PreferencesStorageService] 接口。
+ * 读取 LLM 配置，缺失的项以空串填充。
+ *
+ * 以扩展函数形式提供，无需改动 [PreferencesStorageService] 接口。
  */
 fun PreferencesStorageService.getLLMConfig(): Flow<LLMConfig> = combine(
     observeString("llm.apiKey"),
@@ -20,6 +21,7 @@ fun PreferencesStorageService.getLLMConfig(): Flow<LLMConfig> = combine(
     )
 }
 
+/** 写入 LLM 配置的全部键。 */
 suspend fun PreferencesStorageService.saveLLMConfig(config: LLMConfig) {
     putString("llm.apiKey", config.apiKey)
     putString("llm.baseUrl", config.baseUrl)

@@ -12,6 +12,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.zuoguan.bilimusickmp.vm.TagFilterMode
 
+/**
+ * 标签筛选模式切换：OR 命中任一标签即可，AND 需同时命中所有标签。
+ *
+ * @param mode 当前生效的筛选模式。
+ * @param onModeChange 切换模式时回调。
+ */
 @Composable
 fun TagFilterModeChips(
     mode: TagFilterMode,

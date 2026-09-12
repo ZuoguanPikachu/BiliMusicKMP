@@ -15,6 +15,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+/**
+ * 设置页状态。
+ *
+ * 汇集 LLM 配置、云同步脚本与同步状态，并把编辑结果写回各自的存储服务。
+ */
 class SettingsPageViewModel(
     private val preferencesStorageService: PreferencesStorageService,
     private val jsEngineService: JsEngineService,
@@ -47,12 +52,14 @@ class SettingsPageViewModel(
         }
     }
 
+    /** 保存 LLM 配置到偏好存储。 */
     fun saveConfig(config: LLMConfig) {
         scope.launch {
             preferencesStorageService.saveLLMConfig(config)
         }
     }
 
+    /** 保存云同步脚本到脚本引擎存储。 */
     fun saveScript(script: String) {
         scope.launch {
             jsEngineService.saveScript(script)

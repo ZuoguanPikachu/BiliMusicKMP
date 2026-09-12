@@ -34,10 +34,16 @@ import com.zuoguan.bilimusickmp.models.Song
 import com.zuoguan.bilimusickmp.vm.SongEditorState
 
 /**
- * 歌曲编辑表单（两个平台共用，不含任何容器）。
+ * 歌曲编辑表单（两个平台共用，只负责字段本身）。
  *
- * 完全无状态：草稿由 [SongEditorState.draft] 提供，所有改动通过 [onEdit] 回传。
- * 容器差异（Android 整页 / 桌面对话框）由各自的薄壳负责，这里只管字段。
+ * 完全无状态：草稿由 [SongEditorState.draft] 提供，所有改动通过 [onEdit] 回传给调用方；
+ * 容器由各平台的薄壳提供（Android 整页 / 桌面对话框）。
+ *
+ * @param state 表单状态，草稿与可选标签集合都来自这里。
+ * @param onEdit 以「修改函数」的形式回传草稿变更。
+ * @param onResolveLyricId 切换歌词来源后重新解析歌词 ID。
+ * @param onResolveCover 切换封面来源后重新解析封面。
+ * @param contentPadding 字段区域的内边距，由容器按自身布局决定。
  */
 @Composable
 fun SongEditorForm(
@@ -156,10 +162,10 @@ fun SongEditorForm(
 }
 
 /**
- * 带"清除"按钮的输入框。
+ * 通用的带「清除」按钮的单行输入框。
  *
- * 旧代码里 `pic` 字段的清除按钮误清了 `coverId`（复制粘贴留下的 bug），
- * 这里统一成一个组件，从结构上避免同类问题。
+ * 显示值与回调都由调用方提供，清除按钮同样只回调 [onValueChange]（传入空串），
+ * 因此每个字段各自绑定自己的值与回调，不会互相串扰。
  */
 @Composable
 private fun ClearableField(

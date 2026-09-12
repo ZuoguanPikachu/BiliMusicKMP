@@ -4,12 +4,12 @@ import com.zuoguan.bilimusickmp.models.SyncPrefs
 import kotlinx.coroutines.flow.Flow
 
 /**
- * 通用偏好存储：按键存取字符串 / 数字 / 布尔，支持订阅变化。
+ * 跨平台共用的偏好存储抽象：按键读写字符串 / 数字 / 布尔，并支持订阅变化。
  *
- * 设计目标：
- * - 双平台共用同一套实现（[JsonPreferencesStorageService]），消除平台重复代码；
- * - 未来新增偏好项只需存取新 key，无需改动接口与实现；
- * - 需要云同步的键写入时自动推进 [syncUpdatedAt]，参与 v2 增量同步。
+ * 实现为 [JsonPreferencesStorageService]，所有值统一以字符串形式落盘。
+ *
+ * - 需要云同步的键在写入时推进 [syncUpdatedAt]，作为增量同步的版本依据；
+ * - 键名以 "local." 开头的偏好只保存在本地，不参与云同步。
  */
 interface PreferencesStorageService {
 

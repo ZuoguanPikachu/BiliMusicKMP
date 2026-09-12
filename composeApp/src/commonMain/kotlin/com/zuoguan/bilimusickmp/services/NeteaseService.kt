@@ -21,12 +21,26 @@ import org.jsoup.Jsoup
 import java.net.URLEncoder
 import kotlin.io.encoding.Base64
 
+/**
+ * 网易云 weapi 请求体加密器。
+ *
+ * 服务端不接收明文参数，请求体需要这样构造：先用固定密钥做一次 AES-CBC，再用一次性随机
+ * 密钥做第二次 AES-CBC 得到 `params`；随机密钥本身用服务端公钥做 RSA 加密得到 `encSecKey`。
+ * 服务端用自己的私钥解出随机密钥，再逐层还原请求体。
+ */
 object WEAPIEncryptor {
+    // 服务端 RSA 公钥：指数与十六进制模数
     private const val PUB_EXP = "010001"
     private const val PUB_MOD =
         "00e0b509f6259df8642dbc35662901477df22677ec152b5ff68ace615bb7b725152b3ab17a876aea8a5aa76d2e417629ec4ee341f56135fccf695280104e0312ecbda92557c93870114af6c9d05c4f7f0c3685b7a46bee255932575cce10b424d813cfe4875d3e82047b97ddef52741d546b8e289dc6935b3ece0462db0a22b8e7"
+    // 第一次 AES 用的固定密钥（weapi 约定值）
     private const val NONCE_KEY = "0CoJUm6Qyw8W8jud"
 
+    /**
+     * 加密请求体。
+     *
+     * @return weapi 接口要求的两个表单字段：`params`（密文）与 `encSecKey`（加密后的随机密钥）。
+     */
     fun encryptRequest(data: String): Map<String, String> {
         val randomKey = randomString()
         val first = aesEncrypt(data, NONCE_KEY)
@@ -38,6 +52,7 @@ object WEAPIEncryptor {
         )
     }
 
+    /** 生成 16 位字母数字随机密钥，每次请求都不同。 */
     private fun randomString(): String {
         val chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
         val rnd = SecureRandom()
@@ -48,6 +63,7 @@ object WEAPIEncryptor {
         }
     }
 
+    /** AES-CBC/PKCS5 加密并做 Base64 编码；IV 是 weapi 约定的固定值。 */
     private fun aesEncrypt(text: String, key: String): String {
         val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
         val keySpec = SecretKeySpec(key.toByteArray(), "AES")
@@ -57,6 +73,8 @@ object WEAPIEncryptor {
         return Base64.encode(encrypted)
     }
 
+    // 服务端只接受按 126 字节分块的密文，块内每 2 字节按小端拼成 16 位整数再整体 modPow，
+    // 因此先补齐到 126 的整数倍，逐块加密后用十六进制拼接输出。
     private fun rsaEncrypt(text: String): String {
         val modulus = BigInteger(PUB_MOD, 16)
         val exponent = BigInteger(PUB_EXP, 16)
@@ -88,6 +106,12 @@ object WEAPIEncryptor {
     }
 }
 
+/**
+ * 网易云音乐接口封装：搜索、封面、歌词与音频直链。
+ *
+ * weapi 接口的请求体都要经 [WEAPIEncryptor] 加密，且必须带 Referer/Origin 头；
+ * 已知歌曲 id 时则直接抓歌曲页的 og meta，绕开整套加密流程。
+ */
 class NetEaseService {
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -95,6 +119,7 @@ class NetEaseService {
         .build()
     private val gson = Gson()
 
+    /** 以表单形式提交已加密的参数；weapi 接口会校验 Referer/Origin，缺失即判为非法请求。 */
     private suspend fun post(url: String, data: Map<String, String>): String =
         withContext(Dispatchers.IO) {
             val body = data.entries.joinToString("&") {
@@ -112,6 +137,17 @@ class NetEaseService {
             client.newCall(request).execute().use { it.body.string() }
         }
 
+    /**
+     * 搜索歌曲。
+     *
+     * 支持四种输入：163cn.tv 分享短链、带 `song?id=` 的歌曲页链接、纯数字歌曲 id 以及普通关键词。
+     * 前三种都归一到 [searchById]（短链要先跟随重定向，从真实 URL 里解析歌曲 id），
+     * 只有关键词才走 weapi 搜索接口。
+     *
+     * @param searchType 网易云的搜索类型，1 表示单曲。
+     * @param offset 结果偏移，配合 [limit] 分页。
+     * @throws NoRetryException 分享链接或歌曲链接里解析不出 id 时，[retry] 不会重试。
+     */
     suspend fun search(
         s: String,
         searchType: Int = 1,
@@ -178,6 +214,10 @@ class NetEaseService {
         return extractSongId(real)
     }
 
+    /**
+     * 已知歌曲 id 时直接抓歌曲页，从 og meta 里读标题、歌手、时长与封面，
+     * 免去 weapi 的加密与签名流程。
+     */
     suspend fun searchById(id: String): List<SearchResult> {
         return retry(times = 5) {
             val html = withContext(Dispatchers.IO) {
@@ -200,6 +240,13 @@ class NetEaseService {
         }
     }
 
+    /**
+     * 取音频直链。
+     *
+     * `level=exhigh` 请求较高音质；`data[0].url` 为空说明该曲目无版权或是 VIP 曲目。
+     *
+     * @throws NoRetryException 返回数据为空或拿不到 url 时（重试也无济于事，直接放弃）。
+     */
     suspend fun getAudioUrl(id: String): String {
         return retry(times = 5){
             val payload = mapOf("ids" to listOf(id), "level" to "exhigh", "encodeType" to "acc")
@@ -222,6 +269,13 @@ class NetEaseService {
         }
     }
 
+    /**
+     * 按歌名与歌手反查歌曲 id。
+     *
+     * 只接受歌名相等、且歌手列表里含 [author] 的结果，避免匹配到翻唱或同名歌曲。
+     *
+     * @return 没有匹配到时返回空串。
+     */
     suspend fun getIdByTitleAndAuthor(title: String, author: String): String {
         return retry(times = 5) {
             val payload = mapOf(
@@ -253,6 +307,7 @@ class NetEaseService {
         }
     }
 
+    /** 抓歌曲页的 og:image 取封面地址；页面没有该标签时返回空串。 */
     suspend fun getImageUrl(id: String): String = withContext(Dispatchers.IO) {
         val html = client.newCall(
             Request.Builder().url("https://music.163.com/song?id=$id").build()
@@ -261,6 +316,13 @@ class NetEaseService {
         Jsoup.parse(html).select("meta[property=og:image]").attr("content")
     }
 
+    /**
+     * 取歌词并解析成按时间升序排列的歌词行。
+     *
+     * @param lv 原文歌词版本号，-1 表示取接口默认版本。
+     * @param tv 翻译歌词版本号，-1 表示取默认版本；当前只解析原文歌词。
+     * @return 接口没有歌词时返回空列表；毫秒位为两位时按 ×10 补齐到毫秒。
+     */
     suspend fun getLyric(
         id: String,
         lv: Int = -1,
@@ -323,14 +385,17 @@ class NetEaseService {
     private fun formatDurationFromMillis(ms: Int): String =
         "%02d:%02d".format(ms / 60000, (ms / 1000) % 60)
 
+    // meta 标签里的时长是秒数文本，页面缺失该标签时按 0 处理
     private fun formatDurationFromSeconds(sec: String): String {
         val s = sec.toIntOrNull() ?: 0
         return "%02d:%02d".format(s / 60, s % 60)
     }
 
+    /** 从任意文本中取出第一条 http(s) 链接。 */
     private fun extractUrl(text: String): String? =
         Regex("https?://[^\\s)]+").find(text)?.value
 
+    // 短链重定向后的真实 URL 同样带 id 查询参数，所以两种链接可以共用同一套解析
     private fun extractSongId(url: String): String? =
         Regex("[?&]id=(\\d+)").find(url)?.groupValues?.get(1)
 }

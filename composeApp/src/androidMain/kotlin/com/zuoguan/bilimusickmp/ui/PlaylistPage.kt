@@ -37,6 +37,12 @@ import com.zuoguan.bilimusickmp.vm.SongEditorViewModel
 import com.zuoguan.bilimusickmp.vm.TagFilterMode
 
 
+/**
+ * 歌单页：曲目列表、标签筛选与拖拽排序，点击条目直接播放。
+ *
+ * 页面本身只负责布局与交互，筛选、排序和当前曲目都来自共享的 [PlaylistPageViewModel]；
+ * 长按条目唤起底部菜单，编辑交给 [SongEditorViewModel]，删除仍由本页 ViewModel 处理。
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlaylistPage(
@@ -170,6 +176,7 @@ fun PlaylistPage(
     }
 }
 
+/** 歌单条目：封面、标题与歌手，正在播放的一首加以高亮；排序模式下右侧显示拖拽手柄。 */
 @Composable
 fun SongItem(
     song: Song,
@@ -245,6 +252,7 @@ fun SongItem(
 }
 
 
+/** 顶部工具栏：收缩状态下只显示排序入口，展开后显示标签筛选。 */
 @Composable
 fun ToolBar(
     isOrdering: Boolean,

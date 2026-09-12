@@ -22,8 +22,14 @@ import io.kamel.core.Resource
 import io.kamel.image.asyncPainterResource
 
 /**
- * 歌曲封面预览框：根据封面 URL 实时展示封面图片，
- * 加载中显示占位图 + 进度圈，无图或加载失败时显示占位图。
+ * 歌曲封面预览框：按封面 URL 异步加载并展示封面。
+ *
+ * 加载中显示占位图并叠加进度圈，URL 为空或加载失败时只显示占位图。
+ *
+ * @param pic 封面原始 URL，为空表示没有封面。
+ * @param title 用作图片的无障碍描述。
+ * @param size 预览框边长，同时决定占位图尺寸。
+ * @param radius 圆角半径。
  */
 @Composable
 fun CoverPreviewBox(

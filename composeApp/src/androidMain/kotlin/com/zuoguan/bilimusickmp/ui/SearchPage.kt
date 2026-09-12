@@ -23,6 +23,11 @@ import com.zuoguan.bilimusickmp.services.NavigationService
 import com.zuoguan.bilimusickmp.vm.SearchPageViewModel
 import com.zuoguan.bilimusickmp.vm.SongEditorViewModel
 
+/**
+ * 搜索页：搜索栏与结果列表。
+ *
+ * 窄屏用单列列表，宽屏（≥600dp）改用自适应栅格；点结果直接播放，点添加按钮进入新建歌曲流程。
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchPage(

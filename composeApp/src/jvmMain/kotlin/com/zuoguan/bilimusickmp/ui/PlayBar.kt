@@ -19,6 +19,11 @@ import com.zuoguan.bilimusickmp.models.PlayMode
 import com.zuoguan.bilimusickmp.models.PlaybackState
 import com.zuoguan.bilimusickmp.utils.convertImageUrl
 import com.zuoguan.bilimusickmp.vm.PlayBarViewModel
+/**
+ * 底部播放栏：封面、曲目信息、播放控制、进度条与播放模式切换。
+ *
+ * 进度条在拖动期间以本地值为准，松手后才向播放服务发起 Seek。
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlayBar(
@@ -122,7 +127,7 @@ fun PlayBar(
 
                 Slider(
                     value = sliderPosition,
-                    // 拖动过程中只更新本地状态，松手时才真正 seek：
+                    // 拖动过程中只更新本地状态，松手时才真正 seek
                     onValueChange = { draggingPosition = it },
                     onValueChangeFinished = {
                         draggingPosition?.let { viewModel.seek(it) }

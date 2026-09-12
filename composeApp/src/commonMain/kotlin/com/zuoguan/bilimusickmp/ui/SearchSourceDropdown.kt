@@ -17,6 +17,12 @@ import androidx.compose.ui.Modifier
 import com.zuoguan.bilimusickmp.models.AudioSource
 import com.zuoguan.bilimusickmp.models.label
 
+/**
+ * 搜索音源平台的下拉选择器，按钮上显示当前平台的名称。
+ *
+ * @param selectedSource 当前选中的音源平台。
+ * @param onSourceChange 选择平台时回调。
+ */
 @Composable
 fun SearchSourceDropdown(
     selectedSource: AudioSource,

@@ -28,6 +28,12 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+/**
+ * 歌单页状态。
+ *
+ * 把仓库里的歌曲与标签聚合成过滤后的列表，并承担播放、拖动排序、删除等交互；
+ * 歌词与音频地址在播放时才按各自来源惰性解析。
+ */
 class PlaylistPageViewModel(
     private val songRepository: SongRepositoryService,
     private val audioPlayService: AudioPlayService,
@@ -36,6 +42,7 @@ class PlaylistPageViewModel(
     private val kuGouService: KuGouService
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    /** 列表滚动状态；放在 VM 里是为了让滚动位置跨重组保留。 */
     val lazyListState = LazyListState()
 
     private val _uiState = MutableStateFlow(PlaylistUiState())
@@ -44,6 +51,7 @@ class PlaylistPageViewModel(
     private val _isDragging = MutableStateFlow(false)
 
     private val _uiEvents = Channel<UiEvent>(Channel.BUFFERED)
+    /** 一次性 UI 事件（如播放失败提示）。 */
     val uiEvents = _uiEvents.receiveAsFlow()
 
     init {
@@ -84,6 +92,7 @@ class PlaylistPageViewModel(
                     filterMode = mode,
                 )
             }.collect { newState ->
+                // 拖动排序期间以本地顺序为准，避免仓库回流的列表覆盖正在拖动的结果
                 if (!_isDragging.value) {
                     _uiState.value = newState
                 }
@@ -91,10 +100,12 @@ class PlaylistPageViewModel(
         }
     }
 
+    /** 开始拖动排序：期间暂停接受仓库回流的列表更新。 */
     fun onDragStart() {
         _isDragging.value = true
     }
 
+    /** 结束拖动排序，并把当前顺序持久化到仓库。 */
     fun onDragEnd() {
         val orderedSongs = _uiState.value.filteredSongs
         _isDragging.value = false
@@ -103,6 +114,7 @@ class PlaylistPageViewModel(
         }
     }
 
+    /** 拖动过程中在本地重排列表项。 */
     fun moveSong(from: Int, to: Int) {
         val list = _uiState.value.filteredSongs.toMutableList()
         if (from !in list.indices) return
@@ -122,6 +134,7 @@ class PlaylistPageViewModel(
         }
     }
 
+    /** 把过滤后的列表同步给播放服务，使上一首/下一首按当前视图顺序播放。 */
     suspend fun updatePlaylist(list: List<Song>) {
         audioPlayService.updatePlaylist(list.map { it.toTrackInfo() })
     }
@@ -150,6 +163,7 @@ class PlaylistPageViewModel(
         LyricSource.NONE -> emptyList()
     }
 
+    /** 播放列表中的某首歌，失败时用 Snackbar 提示。 */
     fun playSong(song: Song) {
         val track = song.toTrackInfo()
         scope.launch {
@@ -189,6 +203,7 @@ class PlaylistPageViewModel(
         }
     }
 
+    /** 请求删除某首歌：先弹出确认框，真正删除由 [confirmDelete] 执行。 */
     fun requestDelete(song: Song) {
         _uiState.update {
             it.copy(
@@ -251,6 +266,7 @@ data class PlaylistUiState(
     val songToHandle: Song? = null,
 )
 
+/** 多标签过滤模式：[OR] 命中任一选中标签即可，[AND] 需命中全部选中标签。 */
 enum class TagFilterMode {
     OR,
     AND

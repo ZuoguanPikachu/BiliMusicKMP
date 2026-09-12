@@ -15,14 +15,13 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
-/** 磁盘文件结构。 */
 @Serializable
 internal data class PrefsFileContent(
     val values: Map<String, String> = emptyMap(),
     val syncUpdatedAt: Long = 0L
 )
 
-/** 偏好存储共用的 JSON 编解码器（迁移与主实现一致）。 */
+/** 偏好存储共用的 JSON 编解码器：容忍未知字段以兼容其他版本的文件，并写出默认值。 */
 internal val syncJson = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
 /**

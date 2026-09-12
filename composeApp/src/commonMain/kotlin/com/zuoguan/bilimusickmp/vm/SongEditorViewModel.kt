@@ -23,15 +23,12 @@ import kotlinx.coroutines.launch
 /**
  * 歌曲编辑会话（两个平台共用）。
  *
- * 取代了原先 Android 独有的 `SongEditService` + `SongEditPageViewModel`：
- * 前者只是一个"跨导航边界传参数"的信箱，后者承载的补全/保存逻辑其实与平台无关。
- *
  * 设计要点：
  * - 编辑中的内容放在 [SongEditorState.draft]，是输入 [Song] 的 **copy**。
  *   因为 [Song] 不可变，草稿与仓库列表里的实例天然隔离，取消编辑不会污染原对象。
  * - 打开方式区分意图而不是靠来源页面字符串：新建走 [openForCreate]（按需补全元数据），
  *   编辑已有歌曲走 [openForEdit]。
- * - 两个平台只共用这一个状态源，差异仅限于"用整页还是用对话框承载"。
+ * - 两个平台共用同一个状态源，差异只在于用整页还是用对话框承载。
  */
 class SongEditorViewModel(
     private val songRepository: SongRepositoryService,
@@ -43,6 +40,7 @@ class SongEditorViewModel(
     val uiState: StateFlow<SongEditorState> = _uiState.asStateFlow()
 
     private val _uiEvents = Channel<UiEvent>(Channel.BUFFERED)
+    /** 一次性 UI 事件（补全或保存失败的提示）。 */
     val uiEvents = _uiEvents.receiveAsFlow()
 
     /** 打开会话时可能正在做的元数据补全，关闭/重新打开时要能取消。 */
@@ -83,6 +81,7 @@ class SongEditorViewModel(
         isLoading: Boolean,
         prepare: (suspend () -> Song)?,
     ) {
+        // 切换到新的编辑对象，上一个会话的补全结果已无意义
         prepareJob?.cancel()
         _uiState.update {
             it.copy(
@@ -119,6 +118,7 @@ class SongEditorViewModel(
         }
     }
 
+    /** 关闭会话，并取消进行中的元数据补全。 */
     fun dismiss() {
         prepareJob?.cancel()
         _uiState.update { SongEditorState(allTags = it.allTags) }
@@ -134,7 +134,11 @@ class SongEditorViewModel(
         }
     }
 
-    /** 用户切换歌词来源后，按当前标题/歌手重新查一次歌词 ID。 */
+    /**
+     * 用户切换歌词来源后，按当前标题/歌手重新查一次歌词 ID。
+     *
+     * 歌词 ID 是来源内部的标识，换了来源后原 ID 会失效，所以要重新查询。
+     */
     fun resolveLyricId() {
         val draft = _uiState.value.draft ?: return
         if (draft.title.isEmpty() || draft.author.isEmpty()) return
@@ -149,7 +153,11 @@ class SongEditorViewModel(
         }
     }
 
-    /** 用户切换封面来源后，重新查封面 ID 并取回封面地址。 */
+    /**
+     * 用户切换封面来源后，重新查封面 ID 并取回封面地址。
+     *
+     * 封面 ID 同样是来源内部的标识，换来源后需要重新查询。
+     */
     fun resolveCover() {
         val draft = _uiState.value.draft ?: return
         if (draft.coverSource == CoverSource.BILI_BILI || draft.coverSource == CoverSource.NONE) return
@@ -172,7 +180,7 @@ class SongEditorViewModel(
     /** 保存并关闭会话；调用方（整页/对话框外壳）负责各自的关闭动作。 */
     fun save() {
         val draft = _uiState.value.draft ?: return
-        // 与旧行为一致：没有标签的歌归入 Default
+        // 未填标签的歌曲归入 Default 标签
         val toSave = draft.copy(tags = draft.tags.ifEmpty { listOf("Default") })
 
         scope.launch {

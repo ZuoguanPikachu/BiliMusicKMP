@@ -5,6 +5,7 @@ import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 
+/** 读取 UTF-8 文本；文件不存在或读取出错时返回 null。 */
 internal actual fun readTextFile(path: String): String? {
     val file = File(path)
     if (!file.exists()) return null
@@ -16,6 +17,11 @@ internal actual fun readTextFile(path: String): String? {
     }
 }
 
+/**
+ * 以「写临时文件 + 同目录替换」的方式写入 UTF-8 文本。
+ *
+ * 先写同目录下的 .tmp 再整体替换，写入中断也不会留下半截目标文件。
+ */
 internal actual fun writeTextFileAtomic(path: String, content: String) {
     val file = File(path)
     val parent = file.parentFile
@@ -46,4 +52,5 @@ internal actual fun writeTextFileAtomic(path: String, content: String) {
     }
 }
 
+/** 当前时间戳，毫秒。 */
 internal actual fun currentTimeMillis(): Long = System.currentTimeMillis()

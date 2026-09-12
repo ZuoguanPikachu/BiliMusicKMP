@@ -5,10 +5,15 @@ import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 
+/**
+ * 读取 UTF-8 文本文件。
+ *
+ * @return 文件不存在或读取失败（被占用 / 无权限 / 编码异常）时返回 null；
+ * 读取失败不抛异常，调用方（DI 初始化）不应因此崩溃。
+ */
 internal actual fun readTextFile(path: String): String? {
     val file = File(path)
     if (!file.exists()) return null
-    // 读取失败（文件被占用/无权限/编码异常）不应让调用方（DI 初始化）崩溃
     return try {
         file.readText(Charsets.UTF_8)
     } catch (e: IOException) {
@@ -16,6 +21,10 @@ internal actual fun readTextFile(path: String): String? {
     }
 }
 
+/**
+ * 原子写入 UTF-8 文本文件：先写同目录临时文件，再替换目标文件，
+ * 避免"先删后写"造成的数据丢失窗口。
+ */
 internal actual fun writeTextFileAtomic(path: String, content: String) {
     val file = File(path)
     val parent = file.parentFile
@@ -28,7 +37,6 @@ internal actual fun writeTextFileAtomic(path: String, content: String) {
     tmp.writeText(content, Charsets.UTF_8)
 
     try {
-        // 同目录内的原子替换：不会出现"先删后写"导致的数据丢失窗口
         Files.move(
             tmp.toPath(),
             file.toPath(),

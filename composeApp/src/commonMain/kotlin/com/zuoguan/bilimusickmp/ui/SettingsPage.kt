@@ -37,6 +37,12 @@ import com.zuoguan.bilimusickmp.models.LLMConfig
 import com.zuoguan.bilimusickmp.vm.SettingsPageViewModel
 import org.koin.compose.koinInject
 
+/**
+ * 设置页：编辑 LLM 配置与云同步脚本。
+ *
+ * 输入框用本地状态保存未保存的编辑内容，只有点保存才写回存储；
+ * 已保存的配置发生变化时再回填到输入框。
+ */
 @Composable
 fun SettingsPage(
     modifier: Modifier = Modifier,

@@ -30,12 +30,19 @@ import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 import kotlin.io.encoding.Base64
 
+/**
+ * 酷狗移动端接口封装：搜索、封面、歌词与音频直链。
+ *
+ * 各接口分散在不同域名（搜索在 mobilecdn、封面在 m.kugou.com、歌词在 krcs/lyrics、
+ * 直链在 trackercdn），请求都要带上伪装成 iPhone 客户端的固定请求头。
+ */
 class KuGouService {
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
         .build()
 
+    // 模拟酷狗 iPhone 客户端的 UA：接口会按 UA 下发不同的字段与播放权限
     private val defaultHeaders = mapOf(
         "User-Agent" to "IPhone-8990-searchSong",
         "UNI-UserAgent" to "iOS11.4-Phone8990-1009-0-WiFi"
@@ -53,6 +60,13 @@ class KuGouService {
     private suspend fun getJson(url: HttpUrl): JsonObject =
         Json.parseToJsonElement(getText(url)).jsonObject
 
+    /**
+     * 搜索歌曲。
+     *
+     * @param pageSize 每页条数，直接透传给接口的 pagesize。
+     * @param page 页码，从 1 开始。
+     * @return 解析不出 hash 的条目会被丢弃；接口无结果时返回空列表而不是抛异常。
+     */
     suspend fun search(keyword: String, pageSize: Int = 10, page: Int = 1): List<SearchResult> {
         val url = HttpUrl.Builder()
             .scheme("http")
@@ -108,6 +122,14 @@ class KuGouService {
         }
     }
 
+    /**
+     * 按歌名与歌手反查歌曲 hash。
+     *
+     * 只认歌名完全相等、且歌手串里包含 [author] 的第一条结果 —— 搜索结果里同名歌、翻唱很多，
+     * 放宽匹配会把用户要的原曲换掉。
+     *
+     * @return 没有匹配到时返回空串，调用方据此跳过平台匹配。
+     */
     suspend fun getIdByTitleAndAuthor(title: String, author: String): String {
         val url = HttpUrl.Builder()
             .scheme("http")
@@ -144,6 +166,14 @@ class KuGouService {
         return ""
     }
 
+    /**
+     * 取可播放的音频直链。
+     *
+     * 分两步：先用搜索拿到的 hash 调 get_res_privilege，从返回的 relate_goods 里取真正
+     * 有播放权限的 hash；再用该 hash 与固定盐 `kgcloudv2` 的 MD5 作为 key 向 trackercdn 换地址。
+     *
+     * @throws IllegalStateException 接口返回异常、找不到资源或换不到链接时。
+     */
     suspend fun getAudioUrl(id: String): String {
         val payload = buildJsonObject {
             put("relate", 1)
@@ -187,6 +217,7 @@ class KuGouService {
             ?.jsonObject?.get("hash")?.jsonPrimitive?.contentOrNull
             ?: throw IllegalStateException("获取音频链接错误：未找到资源")
 
+        // 播放地址的 key 由服务端约定的固定盐 "kgcloudv2" 与 hash 一起做 MD5 得到
         val key = md5(songHash + "kgcloudv2")
 
         val url = HttpUrl.Builder()
@@ -210,6 +241,11 @@ class KuGouService {
         } ?: throw IllegalStateException("获取音频链接错误")
     }
 
+    /**
+     * 取歌曲封面地址。
+     *
+     * @return 接口没返回 imgUrl 时返回空串（界面按无封面处理）。
+     */
     suspend fun getImageUrl(id: String): String {
         val url = HttpUrl.Builder()
             .scheme("http")
@@ -223,6 +259,14 @@ class KuGouService {
         return getJson(url)["imgUrl"]?.jsonPrimitive?.contentOrNull.orEmpty()
     }
 
+    /**
+     * 取歌词。
+     *
+     * 先用 hash 查 krc 候选拿到 accesskey 与歌词 id，再下载内容：接口返回的 content 是
+     * Base64 编码的 LRC 文本，要先解码再解析。
+     *
+     * @return 没有候选、字段缺失或内容为空时返回空列表。
+     */
     suspend fun getLyric(id: String): List<LyricLine> {
         val searchUrl = HttpUrl.Builder()
             .scheme("http")
@@ -261,6 +305,12 @@ class KuGouService {
         return parseLyrics(Base64.decode(content).decodeToString())
     }
 
+    /**
+     * 把 LRC 文本解析成按时间升序排列的歌词行。
+     *
+     * 一行可能带多个时间戳（对唱、重复段落），会展开成多行；毫秒位为两位时按 ×10 补齐到毫秒。
+     * 只有时间戳没有文字的纯节奏行会被跳过。
+     */
     fun parseLyrics(lrcContent: String): List<LyricLine> {
         val result = mutableListOf<LyricLine>()
         val regex = """\[(\d{2}):(\d{2}\.\d{2,3})]""".toRegex()

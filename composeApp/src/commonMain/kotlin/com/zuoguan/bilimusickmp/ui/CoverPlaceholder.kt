@@ -16,6 +16,12 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
+/**
+ * 无封面时的占位图：圆角底板加一个音符图标。
+ *
+ * @param size 占位块边长，图标按一半边长缩放。
+ * @param radius 圆角半径。
+ */
 @Composable
 fun CoverPlaceholder(size: Dp = 48.dp, radius: Dp = 6.dp) {
     Box(

@@ -22,6 +22,9 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 
 
+/**
+ * 歌曲编辑表单里的标签编辑器：输入新标签，并从已有标签中勾选。
+ */
 @Composable
 fun TagsEditor(
     selectedTags: List<String>,

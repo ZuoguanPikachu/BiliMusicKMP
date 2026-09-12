@@ -24,8 +24,8 @@ import org.koin.compose.koinInject
 /**
  * 歌曲编辑页（Android 容器）。
  *
- * 只负责"整页"这件事：返回手势、返回按钮、保存按钮的摆放。
- * 表单本身与桌面端共用 [SongEditorForm]，编辑状态来自 [SongEditorViewModel]。
+ * 只负责"整页"这件事：返回手势、返回按钮与保存按钮的摆放。
+ * 表单本身复用共享的 [SongEditorForm]，编辑状态来自 [SongEditorViewModel]。
  */
 @Composable
 fun SongEditPage(
@@ -34,7 +34,6 @@ fun SongEditPage(
 ) {
     val state by viewModel.uiState.collectAsState()
 
-    // 取消编辑并退出页面
     fun cancel() {
         viewModel.dismiss()
         navigationService.back()

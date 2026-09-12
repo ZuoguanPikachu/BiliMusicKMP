@@ -13,11 +13,12 @@ import java.io.File
 private val Context.legacyDataStore by preferencesDataStore(name = "settings")
 
 /**
- * 迁移 v1 Android 的偏好数据（DataStore "settings" → preferences.json）。
- * 仅在 preferences.json 尚不存在时执行一次；迁移后 DataStore 原样保留不再读取。
+ * 把 v1 Android 的偏好数据从 DataStore（"settings"）迁移到 preferences.json。
  *
- * 注意：这里会在 Koin 的 single 工厂里同步执行，因此任何异常都被吞掉并打印日志 ——
- * 迁移失败不应该让整个应用起不来。
+ * 一次性迁移：只在 preferences.json 尚不存在时执行，完成后旧 DataStore 原样保留、不再读取。
+ *
+ * 异常必须全部吞掉并只打日志 —— 本函数在 Koin 的 single 工厂里同步执行，
+ * 迁移失败不应该让应用起不来。
  */
 fun migrateLegacyAndroidPreferences(context: Context) {
     try {

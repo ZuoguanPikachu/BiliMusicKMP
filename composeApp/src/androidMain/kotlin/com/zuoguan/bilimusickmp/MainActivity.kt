@@ -66,6 +66,11 @@ import com.zuoguan.bilimusickmp.ui.SnackbarEvents
 import com.zuoguan.bilimusickmp.ui.SongEditPage
 import org.koin.compose.koinInject
 
+/**
+ * 唯一 Activity，承载整个 Compose 界面。
+ *
+ * Android 13 起播放通知需要 POST_NOTIFICATIONS 运行时权限，因此在创建界面之前先申请。
+ */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -84,6 +89,7 @@ class MainActivity : ComponentActivity() {
 }
 
 
+/** 应用根组件：装配 Scaffold、底部导航与悬浮播放条；歌词页和编辑页会隐藏这两者。 */
 @Composable
 fun App(
     navigationService: NavigationService = koinInject(),
@@ -144,6 +150,7 @@ fun App(
     }
 }
 
+/** 底部导航栏：在歌单 / 搜索 / 设置三个顶层页面之间切换，点击即重置返回栈。 */
 @Composable
 fun BottomNavigationBar(
     selected: Page,
@@ -177,6 +184,7 @@ fun BottomNavigationBar(
     }
 }
 
+/** 页面容器：按 [Page] 的固定顺序判断前进还是后退，播放相应的横向滑动转场。 */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ContentArea(

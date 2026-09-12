@@ -1,5 +1,6 @@
 package com.zuoguan.bilimusickmp.models
 
+/** 音频流的来源平台，同时决定取播放地址时走哪家服务。 */
 enum class AudioSource {
     BILI_BILI,
     KU_GOU,
@@ -7,6 +8,7 @@ enum class AudioSource {
 
 }
 
+/** 音源的展示名，用于 UI 文案。 */
 val AudioSource.label: String
     get() = when (this) {
         AudioSource.BILI_BILI -> "BiliBili"

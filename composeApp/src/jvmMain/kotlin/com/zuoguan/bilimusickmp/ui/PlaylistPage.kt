@@ -30,6 +30,11 @@ import com.zuoguan.bilimusickmp.vm.SongEditorViewModel
 import com.zuoguan.bilimusickmp.vm.TagFilterMode
 import kotlin.text.contains
 
+/**
+ * 歌单页：顶部标签筛选，下面是可拖拽排序的歌曲列表。
+ *
+ * 删除确认与歌曲编辑对话框都在本页承载，编辑状态来自 [SongEditorViewModel]。
+ */
 @Composable
 fun PlaylistPage(
     viewModel: PlaylistPageViewModel = koinInject(),
@@ -112,6 +117,12 @@ fun PlaylistPage(
     }
 }
 
+/**
+ * 单曲卡片：封面、标题与作者，右侧是删除和更多操作按钮。
+ *
+ * @param isPlaying 当前曲目且来自歌单时高亮标题与底色。
+ * @param playSong 点击卡片播放该歌曲。
+ */
 @Composable
 fun SongItem(
     modifier: Modifier = Modifier,
@@ -191,6 +202,12 @@ fun SongItem(
     }
 }
 
+/**
+ * 标签筛选器：折叠时单行显示标签，可展开为多行查看与勾选。
+ *
+ * @param mode 标签之间的筛选模式（任一命中 / 全部命中）。
+ * @param onTagToggle 勾选或取消某个标签。
+ */
 @Composable
 fun ExpandableMultiTagSelector(
     mode: TagFilterMode,

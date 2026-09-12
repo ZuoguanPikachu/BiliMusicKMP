@@ -13,8 +13,8 @@ import com.zuoguan.bilimusickmp.vm.SongEditorState
 /**
  * 歌曲编辑对话框（桌面容器）。
  *
- * 只负责"对话框"这件事：标题与按钮的摆放。
- * 表单与 Android 整页共用 [SongEditorForm]，编辑状态来自共用的
+ * 只负责对话框这件事：标题与「确定 / 取消」按钮的摆放。
+ * 表单复用 [SongEditorForm]，编辑状态来自共用的
  * [com.zuoguan.bilimusickmp.vm.SongEditorViewModel]。
  */
 @Composable

@@ -25,10 +25,17 @@ import io.kamel.core.Resource
 import io.kamel.image.asyncPainterResource
 
 
+/**
+ * 歌词页：左侧封面与曲目信息，右侧歌词列表。
+ *
+ * 高亮行由播放进度与歌词延时（bias）推导，列表随后自动滚动到该行；
+ * 点击某行可跳转到对应时间，延时改动需点保存才写回曲目。
+ */
 @Composable
 fun LyricsPage(viewModel: LyricsPageViewModel = koinInject()) {
     val uiState by viewModel.uiState.collectAsState()
     val currentTrack = uiState.currentTrack
+    // 歌词延时（毫秒）：换曲目时重置为该曲目已保存的值，所以用 currentTrack 作 key
     var bias by remember(currentTrack) {
         mutableStateOf(currentTrack?.lyricBias ?: 0)
     }
@@ -37,6 +44,7 @@ fun LyricsPage(viewModel: LyricsPageViewModel = koinInject()) {
         uiState.lyrics.indexOfLast { it.timeMs + bias <= uiState.currentPositionMs }
     }
     val density = LocalDensity.current
+    // 量出页面高度，用来给歌词列表设置上下留白，使高亮行落在垂直中间
     var height by remember { mutableStateOf(0.dp) }
 
     LaunchedEffect(currentIndex) {
@@ -127,6 +135,7 @@ fun LyricsPage(viewModel: LyricsPageViewModel = koinInject()) {
             }
 
             if (currentTrack != null) {
+                // 改过延时才点亮保存按钮，保存后重新置灰
                 var saveable by remember(currentTrack) {
                     mutableStateOf(false)
                 }

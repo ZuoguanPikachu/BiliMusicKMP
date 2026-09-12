@@ -24,11 +24,18 @@ import org.koin.dsl.module
 import java.io.File
 
 
+/**
+ * 桌面端的 Koin 模块。
+ *
+ * 各服务与 ViewModel 集中在此绑定：偏好存储落盘为 preferences.json，
+ * 音频播放由 VLC 实现。
+ */
 val appModule = module {
     single { BiliService() }
     single { NetEaseService() }
     single { KuGouService() }
     single { JsEngineService(File(getAppConfigDir(), "cloud_sync_script.js")) }
+    // 建存储前先跑一次旧配置迁移；无旧文件时直接返回
     single<PreferencesStorageService> {
         migrateLegacyJvmPreferences()
         JsonPreferencesStorageService(File(getAppConfigDir(), "preferences.json").absolutePath)
@@ -38,7 +45,7 @@ val appModule = module {
     single { SongRepositoryService() }
     single { SongMetadataService(get(), get(), get(), get()) }
     single(createdAtStart = true) { CloudSyncService(get(), get(), get()) }
-    // 歌曲编辑会话：与 Android 共用同一实现，桌面端只是用对话框承载
+    // 歌曲编辑会话：ViewModel 双平台共用，桌面侧由对话框承载
     single { SongEditorViewModel(get(), get()) }
 
     single { SearchPageViewModel(get(), get(), get(), get()) }

@@ -15,6 +15,15 @@ import com.zuoguan.bilimusickmp.models.PlaybackState
 import com.zuoguan.bilimusickmp.models.TrackInfo
 import kotlinx.coroutines.launch
 
+/**
+ * 基于 VLC（vlcj）的音频播放服务。
+ *
+ * 由 [MediaPlayerFactory] 创建媒体播放器，把 VLC 的事件回调映射为
+ * [state]、[position]、[time]、[duration] 等 StateFlow；
+ * 播放列表与播放模式由本类维护，曲目自然结束后自动切下一首。
+ *
+ * 应用退出前必须调用 [close]，否则 VLC 的本机资源不会释放。
+ */
 class VlcAudioPlayService : AudioPlayService {
 
     private val factory = MediaPlayerFactory()
@@ -49,6 +58,7 @@ class VlcAudioPlayService : AudioPlayService {
 
 
     init {
+        // VLC 的事件在它自己的线程上回调，这里只做 StateFlow 赋值
         mediaPlayer.events().addMediaPlayerEventListener(object : MediaPlayerEventAdapter() {
 
             override fun playing(mediaPlayer: MediaPlayer) {
@@ -66,6 +76,7 @@ class VlcAudioPlayService : AudioPlayService {
             override fun finished(mediaPlayer: MediaPlayer) {
                 _state.value = PlaybackState.Ended
 
+                // 切歌放到协程里执行：取流可能挂起，异常也不能冒泡回 VLC 回调线程
                 scope.launch {
                     try {
                         playNext()
@@ -119,6 +130,9 @@ class VlcAudioPlayService : AudioPlayService {
         _duration.value = 0L
         _currentTrack.value = track
 
+        // VLC 用 ":" 前缀的参数在播放时透传给 libvlc。
+        // B 站音频地址有防盗链校验，必须带上 bilibili 的 Referer；各音源对
+        // User-Agent 也有校验，因此按音源分别伪装请求头，否则取不到音频流
         val options = when (track.audioSource) {
             AudioSource.BILI_BILI -> arrayOf(
                 ":http-referrer=https://www.bilibili.com/",
@@ -160,6 +174,7 @@ class VlcAudioPlayService : AudioPlayService {
     }
 
     override suspend fun seekMs(time: Long) {
+        // 优先用 VLC 实时上报的时长，拿不到时退回 lengthChanged 记录的 duration
         val duration = mediaPlayer.status().length().takeIf { it > 0 } ?: duration.value
         if (duration <= 0) return
 
@@ -172,6 +187,7 @@ class VlcAudioPlayService : AudioPlayService {
         play(next)
     }
 
+    // 单曲循环返回当前曲目本身，随机模式排除当前曲目；顺序模式循环回绕
     private fun nextTrack(): TrackInfo? {
         val current = _currentTrack.value ?: return null
         val list = playlist
@@ -215,6 +231,7 @@ class VlcAudioPlayService : AudioPlayService {
         play(prev)
     }
 
+    /** 释放媒体播放器与工厂；应用退出前调用。 */
     override fun close() {
         runCatching { mediaPlayer.release() }
         runCatching { factory.release() }

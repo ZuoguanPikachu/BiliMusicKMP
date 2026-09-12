@@ -33,9 +33,10 @@ data class DirtySync(
 /**
  * 歌曲仓库（本地数据入口）：
  *
- * - 每个歌曲文档带 [SongDto.updatedAt] 内容版本（LWW 依据），升级前存量数据为 0（基线）；
- * - 顺序存于 `~order` 元文档（有序 id 列表 + 版本），歌曲的 [Song.ts] 由顺序索引推导，
- *   不再写回文档 —— 排序只改一个文档；
+ * - 每个歌曲文档带 [SongDto.updatedAt] 内容版本（LWW 依据）；无版本信息的历史数据记为 0（基线），
+ *   会被任意远端版本覆盖；
+ * - 顺序存于 `~order` 元文档（有序 id 列表 + 版本），歌曲的 [Song.ts] 由顺序索引推导、不落库，
+ *   因此排序只需更新一个文档；
  * - 删除写 `~del:<id>` 墓碑文档，防止合并时已删除的歌曲被复活；
  * - 用户变更通过 [userChanges] 通知云同步服务做防抖推送。
  */
@@ -45,6 +46,7 @@ class SongRepositoryService {
         // Couchbase Lite 文档 ID 不允许以 "_" 开头，元文档统一用 "~" 前缀
         const val ORDER_DOC_ID = "~order"
         const val TOMBSTONE_PREFIX = "~del:"
+        // 哨兵值：表示未应用任何内容，低于一切真实 updatedAt（真实值均 >= 0）
         const val NO_APPLY = Long.MIN_VALUE
 
         fun tombstoneId(songId: String) = TOMBSTONE_PREFIX + songId
@@ -54,12 +56,14 @@ class SongRepositoryService {
     private val coll: Collection = DatabaseHelper.songCollection
 
     private val _songs = MutableStateFlow<List<Song>>(emptyList())
+    /** 当前歌曲列表，按 `~order` 元文档中的位次排列。 */
     val songs: StateFlow<List<Song>> = _songs.asStateFlow()
 
     private val _allTags = MutableStateFlow<List<String>>(emptyList())
     val allTags: StateFlow<List<String>> = _allTags.asStateFlow()
 
     private val _userChanges = MutableSharedFlow<Unit>(extraBufferCapacity = 64)
+    /** 本地用户变更信号（远端合并不触发，避免回推），云同步据此做防抖推送。 */
     val userChanges: SharedFlow<Unit> = _userChanges.asSharedFlow()
 
     private var clock = 0L
@@ -70,7 +74,7 @@ class SongRepositoryService {
 
     // ---------- 版本时钟 ----------
 
-    /** 本地单调版本：取当前时间与本地时钟 +1 的较大者，保证单调递增。 */
+    /** 本地单调版本：取当前时间与本地时钟 +1 的较大者，保证单调递增、避免同毫秒冲突。 */
     private fun nextClock(): Long {
         clock = maxOf(currentTimeMillis(), clock + 1)
         return clock
@@ -132,7 +136,7 @@ class SongRepositoryService {
 
     private fun ensureOrderIndex() {
         if (coll.getDocument(ORDER_DOC_ID) != null) return
-        // 从存量文档构建初始顺序：优先保留 v1 时代的 ts 位次，其次按文档 id。
+        // 从存量文档推导初始顺序：老文档遗留的 ts 字段仅用于确定初始位次，缺失时按文档 id 排序。
         val rows = queryAllRows().filter { row ->
             val id = row.getString("id") ?: return@filter false
             !isMetaId(id)
@@ -194,8 +198,9 @@ class SongRepositoryService {
     // ---------- 云同步：脏数据收集 / 快照 / 远端合并 ----------
 
     /**
-     * 收集相对 [watermark] 的脏数据。
-     * @param forceFull 首次推送时传 true：无论 watermark 高低都全量收集（含基线歌曲与墓碑）。
+     * 收集相对 [watermark] 的脏数据（已删除歌曲以墓碑形式返回）。
+     *
+     * @param forceFull 首次推送时传 true：无论 watermark 高低都全量收集，保证对端拿到基线数据。
      */
     suspend fun collectDirty(watermark: Long, forceFull: Boolean): DirtySync {
         val rows = queryAllRows()
@@ -250,7 +255,8 @@ class SongRepositoryService {
     }
 
     /**
-     * 应用远端歌曲列表（LWW：incoming.updatedAt >= 本地则生效，"相等且分歧时远端胜"）。
+     * 应用远端歌曲列表（LWW：`incoming.updatedAt >= 本地` 则生效，相等且分歧时远端胜）。
+     *
      * @return 实际应用到的最大 updatedAt；未应用任何内容返回 [NO_APPLY]。
      */
     suspend fun applyRemoteSongs(songs: List<SongDto>): Long {
@@ -262,6 +268,7 @@ class SongRepositoryService {
         return applied
     }
 
+    /** 单曲 LWW：歌曲文档与墓碑各自持有版本，比较后决定删除、复活还是保留本地。 */
     private fun applySongDto(dto: SongDto): Long {
         val songDoc = coll.getDocument(dto.id)
         val tombDoc = coll.getDocument(tombstoneId(dto.id))
@@ -298,9 +305,11 @@ class SongRepositoryService {
     }
 
     /**
-     * 应用远端顺序（LWW）。
-     * 若本地存在远端未收录的歌曲，追加到末尾并把本地顺序版本抬到 [nextClock]（保持脏状态以便推送）。
-     * @return remote 原始 order.updatedAt；未应用返回 [NO_APPLY]。
+     * 应用远端顺序（LWW：`order.updatedAt >= 本地` 则生效）。
+     *
+     * 远端未收录的本地歌曲追加到末尾，并把本地顺序版本抬到 [nextClock]，保持 dirty 状态等待推送。
+     *
+     * @return 远端原始 order.updatedAt；未应用返回 [NO_APPLY]。
      */
     suspend fun applyRemoteOrder(order: SyncOrder?): Long {
         if (order == null) return NO_APPLY

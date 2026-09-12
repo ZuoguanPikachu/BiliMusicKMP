@@ -29,12 +29,20 @@ import org.koin.core.context.startKoin
 import uk.co.caprica.vlcj.factory.discovery.NativeDiscovery
 import java.io.File
 
+// 供进程退出钩子访问容器：关闭窗口或进程退出时都要释放 VLC 资源
 private var koinRef: Koin? = null
 
+/** 释放音频播放服务；容器未就绪或重复调用都不会抛异常。 */
 private fun releaseAudioPlayService() {
     runCatching { koinRef?.get<AudioPlayService>()?.close() }
 }
 
+/**
+ * 桌面端应用入口。
+ *
+ * 启动前探测 VLC 本机库、准备 Couchbase Lite 的数据与临时目录，
+ * 再启动 Koin 并注册退出钩子以释放播放服务，最后打开窗口承载 Compose 界面。
+ */
 fun main() {
     val vlcFound = NativeDiscovery().discover()
     val cfgDir = getAppConfigDir()
@@ -71,6 +79,12 @@ fun main() {
     }
 }
 
+/**
+ * VLC 缺失提示对话框。
+ *
+ * 探测不到 VLC 本机库时给出说明与安装地址；用户确认后关闭，
+ * 界面其余部分照常可用（只是无法播放音频）。
+ */
 @Composable
 private fun VlcMissingDialog() {
     var dismissed by remember { mutableStateOf(false) }
@@ -91,6 +105,7 @@ private fun VlcMissingDialog() {
     )
 }
 
+/** 应用根界面：左侧导航栏、内容区与底部播放栏，并统一承载 Snackbar。 */
 @Composable
 fun App(
     playlistViewModel: PlaylistPageViewModel = koinInject(),
@@ -131,6 +146,7 @@ fun App(
     }
 }
 
+/** 左侧导航栏，在歌单、搜索与设置页面之间切换。 */
 @Composable
 fun AppNavigationRail(
     selected: Page,
@@ -166,6 +182,7 @@ fun AppNavigationRail(
     }
 }
 
+/** 按当前页面渲染内容；未识别的页面回退到歌单页。 */
 @Composable
 fun ContentArea(page: Page) {
     Box(

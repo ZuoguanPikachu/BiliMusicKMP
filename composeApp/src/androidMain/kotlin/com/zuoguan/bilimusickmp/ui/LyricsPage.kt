@@ -27,6 +27,11 @@ import io.kamel.core.Resource
 import io.kamel.image.asyncPainterResource
 
 
+/**
+ * 歌词页：展示封面与逐行歌词，并按当前播放位置自动滚动到高亮行。
+ *
+ * 用户正在手动滚动时不抢位置；调整歌词延时后立即重新计算高亮行。
+ */
 @Composable
 fun LyricsPage(
     viewModel: LyricsPageViewModel = koinInject(),
@@ -44,7 +49,7 @@ fun LyricsPage(
     }
 
     LaunchedEffect(currentIndex) {
-        // -1 表示"还没有任何一句开始"（旧实现 coerceAtLeast(0) 会错误地高亮第一句）
+        // -1 表示还没有任何一句开始
         if (currentIndex < 0) return@LaunchedEffect
         // 用户正在手动滚动时不要抢滚动位置
         if (listState.isScrollInProgress) return@LaunchedEffect

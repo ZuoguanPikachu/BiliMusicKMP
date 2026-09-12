@@ -15,6 +15,12 @@ import java.net.URLEncoder
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
+/**
+ * B 站 Web 接口封装：负责 WBI 签名、视频搜索、取 cid 与音频直链。
+ *
+ * 所有请求共用一个 [OkHttpClient]，由拦截器统一补上 B 站要求的 Referer 与 User-Agent，
+ * 并通过 [SimpleCookieJar] 在请求之间保持 cookie —— 缺了这些会被接口判定为异常请求。
+ */
 class BiliService {
     private val cookieJar = SimpleCookieJar()
     private val client = OkHttpClient.Builder()
@@ -22,6 +28,7 @@ class BiliService {
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
         .addInterceptor {
+            // 防盗链：B 站接口会校验 Referer/User-Agent，缺失时返回错误码或空数据
             val req = it.request().newBuilder()
                 .header("Referer", "https://www.bilibili.com/")
                 .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36")
@@ -29,14 +36,18 @@ class BiliService {
             it.proceed(req)
         }.build()
 
+    // nav 接口 wbi_img.img_url 的文件名（不含扩展名），与 subKey 拼接后参与 WBI 签名
     @Volatile
     private var imgKey = ""
 
+    // nav 接口 wbi_img.sub_url 的文件名（不含扩展名）
     @Volatile
     private var subKey = ""
+    // 保证密钥只被拉取一次：并发请求同时初始化时，后来者在锁上等待而不是重复发请求
     private val wbiMutex = Mutex()
     private var wbiInitialized = false
 
+    // WBI mixinKey 的重排下标表：按此顺序从 imgKey + subKey 中取字符，再截前 32 位
     private val mixinKeyEncTab = intArrayOf(
         46,47,18,2,53,8,23,32,15,50,10,31,58,3,45,35,27,43,5,49,
         33,9,42,19,29,28,14,39,12,38,41,13,37,48,7,16,24,55,40,
@@ -45,11 +56,17 @@ class BiliService {
     )
 
     init {
+        // 预置 b_nut cookie，部分接口要求请求自带 cookie 才正常返回
         cookieJar.set("b_nut", System.currentTimeMillis().toString(), "bilibili.com")
     }
 
-    // ---------------- WBI ----------------
+    // ---------------- WBI（请求签名） ----------------
 
+    /**
+     * 确保 WBI 密钥已就绪，未就绪时先拉取一次。
+     *
+     * @throws Exception 拉取密钥失败时抛出，由调用方决定是否重试。
+     */
     private suspend fun ensureWbiReady() {
         if (wbiInitialized) return
 
@@ -65,6 +82,12 @@ class BiliService {
         }
     }
 
+    /**
+     * 从 nav 接口取 imgKey 与 subKey。
+     *
+     * 两个值藏在返回的图片 URL 里，即 `.../xxxxxxxx.png` 的文件名部分，所以用
+     * `substringAfterLast("/")` 加 `substringBefore(".")` 剥出来。
+     */
     private suspend fun refreshWbiKeys() {
         val json = get("https://api.bilibili.com/x/web-interface/nav")
         val data = JSONObject(json).getJSONObject("data").getJSONObject("wbi_img")
@@ -73,11 +96,21 @@ class BiliService {
         subKey = data.getString("sub_url").substringAfterLast("/").substringBefore(".")
     }
 
+    /** 按重排表打乱 imgKey + subKey，取前 32 位作为 mixinKey。 */
     private fun getMixinKey(orig: String): String {
         require(orig.length > mixinKeyEncTab.max()) { "WBI 密钥长度异常: ${orig.length}" }
         return mixinKeyEncTab.joinToString("") { orig[it].toString() }.substring(0, 32)
     }
 
+    /**
+     * 给查询参数加上 WBI 签名。
+     *
+     * 流程：补上 `wts` 时间戳 → 按键名排序 → 过滤 `!'()*`（这些字符会被 URL 编码器改写，
+     * 导致服务端算出的签名与本地不一致）→ 拼成查询串后与 mixinKey 一起做 MD5 得到 `w_rid`。
+     *
+     * @return 含 `wts` 与 `w_rid` 的完整参数，可直接拼成查询串。
+     * @throws IllegalStateException 密钥尚未初始化时。
+     */
     private fun encWbi(params: MutableMap<String, String>): Map<String, String> {
         if (imgKey.isEmpty() || subKey.isEmpty()) {
             throw IllegalStateException("WBI 密钥未初始化")
@@ -97,8 +130,17 @@ class BiliService {
         return filtered + ("w_rid" to sign)
     }
 
-    // ---------------- API ----------------
+    // ---------------- API（搜索 / 播放地址） ----------------
 
+    /**
+     * 搜索视频。
+     *
+     * 搜索接口只认关键词，直接拿链接当关键词搜不到东西，所以这里先把链接归一成 BV 号：
+     * b23.tv 短链需要跟随重定向拿到真实 URL，完整视频链接则可以直接提取 BV 号。
+     *
+     * @return 只保留 type 为 video 的结果；标题已去掉接口返回的 HTML 高亮标签。
+     * @throws Exception 接口请求失败或返回的 JSON 结构不符合预期时。
+     */
     suspend fun search(keyword: String): List<SearchResult> {
         try {
             ensureWbiReady()
@@ -131,6 +173,7 @@ class BiliService {
                 .mapNotNull { i ->
                     val o = arr.getJSONObject(i)
 
+                    // 搜索结果混有番剧、直播间等类型，只保留普通视频
                     if (o.optString("type") != "video") {
                         return@mapNotNull null
                     }
@@ -139,6 +182,7 @@ class BiliService {
                         id = o.getString("bvid"),
                         title = Jsoup.parse(o.getString("title")).text().trim(),
                         author = o.getString("author"),
+                        // 接口返回的 pic 是 //i0.hdslb.com/... 这类协议相对地址，需要补上协议头
                         pic = "https:${o.getString("pic")}",
                         duration = formatTime(o.getString("duration")),
                         audioSource = AudioSource.BILI_BILI
@@ -152,6 +196,11 @@ class BiliService {
     }
 
 
+    /**
+     * 取视频的 cid（播放地址所需的稿件内部分段标识）。
+     *
+     * @throws Exception 接口请求失败或返回结构异常时。
+     */
     suspend fun getCid(bvid: String): String {
         try {
             ensureWbiReady()
@@ -164,6 +213,15 @@ class BiliService {
         }
     }
 
+    /**
+     * 取音频直链。
+     *
+     * `fnval=16` 让接口返回 DASH 格式，其中 `dash.audio` 是同一首歌的多条码率音轨；
+     * 这里取 `id` 最大的一条（B 站的音轨 id 越大音质越高），再返回它的 `baseUrl`。
+     *
+     * @param cid 已知的 cid；传 null 时内部再调 [getCid] 查一次。
+     * @throws IllegalStateException 响应缺少 data/dash/audio、音轨列表为空或 baseUrl 缺失时。
+     */
     suspend fun getAudioUrl(bvid: String, cid: String? = null): String {
         try {
             ensureWbiReady()
@@ -206,13 +264,18 @@ class BiliService {
             )
         }
     }
-    // ---------------- HTTP ----------------
+    // ---------------- HTTP（底层请求） ----------------
 
+    /** 发 GET 请求并在 IO 线程读取响应体文本。 */
     private suspend fun get(url: String): String = withContext(Dispatchers.IO) {
         client.newCall(Request.Builder().url(url).build())
             .execute().use { it.body.string() }
     }
 
+    /**
+     * 跟随重定向并返回最终 URL，用于把 b23.tv 短链还原成真正的视频链接。
+     * OkHttp 默认跟随重定向，响应对象上的 request 就是重定向后的请求。
+     */
     private suspend fun resolveRedirectUrl(url: String): String = withContext(Dispatchers.IO) {
         val request = Request.Builder().url(url).build()
         client.newCall(request).execute().use { response ->
@@ -220,13 +283,15 @@ class BiliService {
         }
     }
 
-    // ---------------- Utils ----------------
+    // ---------------- Utils（解析与格式化） ----------------
 
+    /** 计算十六进制小写 MD5，用于 WBI 与音频直链的签名。 */
     private fun md5(s: String): String =
         MessageDigest.getInstance("MD5")
             .digest(s.toByteArray())
             .joinToString("") { "%02x".format(it) }
 
+    /** 把接口返回的 mm:ss / hh:mm:ss 补零成固定宽度；段数不认识时返回占位的 `--:--`。 */
     private fun formatTime(time: String): String {
         val parts = time.split(":")
         return when (parts.size) {
@@ -238,12 +303,14 @@ class BiliService {
         }
     }
 
+    /** 从链接中提取 BV 号；链接里没有视频路径时返回 null。 */
     private fun extractBvId(url: String): String? {
         val regex = Regex("/video/(BV[0-9A-Za-z]+)")
         val match = regex.find(url)
         return match?.groups?.get(1)?.value
     }
 
+    /** 从任意文本中取出第一条 http(s) 链接（分享文案里链接前后可能带其他文字）。 */
     private fun extractUrl(text: String): String? {
         val regex = Regex("https?://[^\\s)]+")
         val match = regex.find(text)

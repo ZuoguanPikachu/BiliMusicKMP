@@ -43,14 +43,17 @@ data class SyncUiState(
  * v2 云同步（仅依赖 COS 对象存储 + 用户脚本）：
  *
  * 协议：
- * - `sync/v2/head.json`：头部指针（每次同步只拉 ~200B）；
+ * - `sync/v2/head.json`：头部指针（每次同步先读它判断是否需要拉取，体积约 200B）；
  * - `sync/v2/deltas/{v}.json`：增量（仅含变更歌曲/顺序/偏好，内嵌完整载荷）；
- * - `sync/v2/snapshots/current.json`：全量快照（固定 key 覆盖写，只保留一份；引导与增量链过长时兜底）。
+ * - `sync/v2/snapshots/current.json`：全量快照（固定 key 覆盖写，只保留一份；
+ *   引导与增量链过长时兜底）。
  *
  * 语义：
- * - 歌曲按 updatedAt LWW；"相等且分歧时远端胜"（升级基线统一给 0，首轮不会互相覆盖）；
+ * - 歌曲按 updatedAt LWW：`incoming.updatedAt >= 本地` 即生效，相等且分歧时远端胜；
+ *   无版本信息的历史数据记为 0（基线），会被任意远端版本覆盖；
  * - 首次推送全量（含基线歌曲与墓碑），之后只推 dirty 增量；
- * - 推送前后自校验 head，发现并发提交则拉取合并后重推（自愈，最多 3 轮）；
+ * - 推送前后校验 head：推送后 head 若已被并发推进，则拉取合并后重推
+ *   （自愈，最多 [MAX_HEAL_ROUNDS] 轮）；
  * - 每 [SNAPSHOT_EVERY] 个版本生成一次全量快照，拉取端增量链超过 [CHAIN_LIMIT] 时走快照路径。
  */
 class CloudSyncService(
@@ -106,7 +109,7 @@ class CloudSyncService(
         }
     }
 
-    /** 手动触发同步（设置页"立即同步"）。 */
+    /** 手动触发同步（设置页「立即同步」）。 */
     suspend fun syncNow() {
         syncMutex.withLock {
             try {
@@ -130,7 +133,7 @@ class CloudSyncService(
                     prefs.putLong(SyncKeys.LOCAL_HEAD_V, head.v)
                 }
 
-                // 推送脏数据（自愈：若推送后 head 被他人推进，则拉取合并后重推）
+                // 推送脏数据；自愈：push 后 head 被并发推进说明远端有新内容，拉取合并后重推
                 for (round in 0 until MAX_HEAL_ROUNDS) {
                     val pushedV = push(device) ?: break
                     val verify = fetchHead() ?: break
@@ -164,7 +167,7 @@ class CloudSyncService(
 
     // ---------- 协议：种子 / 拉取 / 推送 ----------
 
-    /** 云端无 head：以本设备全量数据初始化。 */
+    /** 云端无 head：以本设备全量数据初始化，并写回本地 head 版本与 watermark。 */
     private suspend fun seed(device: String) {
         val v = nextVersion(0)
         val snapshot = repository.buildSnapshot(device, v, currentTimeMillis())
@@ -187,7 +190,10 @@ class CloudSyncService(
         prefs.putBoolean(SyncKeys.LOCAL_EVER_PUSHED, true)
     }
 
-    /** 拉取并应用远端增量链（必要时回退到固定 key 的全量快照）。 */
+    /**
+     * 拉取并应用远端增量链；本地无版本（localHeadV 为 0）或链长超过 [CHAIN_LIMIT] 时，
+     * 先应用固定 key 的全量快照，再补拉其后的增量。
+     */
     private suspend fun pull(head: SyncHead, localHeadV: Long) {
         val gap = head.v - localHeadV
         var appliedFrom = localHeadV
@@ -206,7 +212,9 @@ class CloudSyncService(
 
     /**
      * 下载并应用固定 key 的全量快照。
-     * @return 快照内容里的版本号（用于决定补拉哪些增量）；快照不存在返回 [SongRepositoryService.NO_APPLY]。
+     *
+     * @return 快照内容里的版本号（用于决定补拉哪些增量）；
+     *   快照不存在返回 [SongRepositoryService.NO_APPLY]。
      */
     private suspend fun applyCurrentSnapshot(): Long {
         val raw = engine.downloadText(SyncKeys.SNAPSHOT_KEY) ?: return SongRepositoryService.NO_APPLY
@@ -228,7 +236,11 @@ class CloudSyncService(
         bumpWatermark(applied)
     }
 
-    /** 推送本地脏数据；无脏数据返回 null，否则返回新版本号。 */
+    /**
+     * 推送本地脏数据（歌曲 / 顺序 / 偏好）。
+     *
+     * @return 无脏数据时返回 null，否则返回新版本号。
+     */
     private suspend fun push(device: String): Long? {
         val head = fetchHead() ?: return null
         val watermark = prefs.getLong(SyncKeys.LOCAL_WATERMARK)
@@ -254,7 +266,8 @@ class CloudSyncService(
         )
         engine.uploadJson(SyncKeys.deltaKey(newV), json.encodeToString(delta))
 
-        // 定期压缩：覆盖写固定 key 的全量快照并记录版本
+        // 定期压缩：距上次快照满 [SNAPSHOT_EVERY] 个版本时覆盖写固定 key 的快照，
+        // 缩短后续拉取的增量链
         val snapshot = if (newV - head.snapshot >= SNAPSHOT_EVERY) {
             val snap = repository.buildSnapshot(device, newV, currentTimeMillis())
                 .copy(prefs = prefs.syncablePayload())
@@ -294,9 +307,11 @@ class CloudSyncService(
         return json.decodeFromString<SyncHead>(raw)
     }
 
+    // 版本号同样单调递增：避免同一毫秒内的两次推送撞上同一版本
     private fun nextVersion(prev: Long): Long =
         maxOf(currentTimeMillis(), prev + 1)
 
+    // watermark 只增不减：collectDirty 据它跳过已推送的版本，避免重复上传
     private suspend fun bumpWatermark(applied: Long) {
         if (applied == SongRepositoryService.NO_APPLY) return
         val current = prefs.getLong(SyncKeys.LOCAL_WATERMARK)

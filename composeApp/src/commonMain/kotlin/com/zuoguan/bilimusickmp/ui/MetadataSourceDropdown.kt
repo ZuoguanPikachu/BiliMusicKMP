@@ -18,6 +18,13 @@ import com.zuoguan.bilimusickmp.models.CoverSource
 import com.zuoguan.bilimusickmp.models.LyricSource
 import com.zuoguan.bilimusickmp.models.MetadataSource
 
+/**
+ * 元数据来源下拉选择器，同一个组件同时服务歌词来源与封面来源。
+ *
+ * @param sources 可选的来源列表，通常是 `LyricSource.entries` 或 `CoverSource.entries`。
+ * @param selectedSource 当前选中的来源，显示在只读输入框中。
+ * @param onSourceChange 选择来源时回调，由调用方决定是否触发重新解析。
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun <T : MetadataSource> MetadataSourceDropdown(
@@ -28,6 +35,7 @@ fun <T : MetadataSource> MetadataSourceDropdown(
 ) {
     var expanded by remember { mutableStateOf(false) }
 
+    // 「无」这一项只在它已是当前选中项时展示，避免用户主动切到空来源
     val selectable = sources.filter { !it.isNone || it == selectedSource }
 
     ExposedDropdownMenuBox(

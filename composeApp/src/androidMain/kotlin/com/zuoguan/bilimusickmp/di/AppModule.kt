@@ -43,7 +43,7 @@ val appModule = module {
     single { NavigationService() }
     single { SongMetadataService(get(), get(), get(), get()) }
     single(createdAtStart = true) { CloudSyncService(get(), get(), get()) }
-    // 歌曲编辑会话：与桌面端共用同一实现，Android 只是用整页承载
+    // 歌曲编辑会话：双平台共用同一 ViewModel，Android 侧用整页承载表单
     single { SongEditorViewModel(get(), get()) }
 
     single { PlaylistPageViewModel(get(), get(), get(), get(), get()) }

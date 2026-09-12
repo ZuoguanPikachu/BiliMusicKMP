@@ -23,6 +23,7 @@ import com.zuoguan.bilimusickmp.services.NavigationService
 import com.zuoguan.bilimusickmp.utils.convertImageUrl
 import com.zuoguan.bilimusickmp.vm.PlayBarViewModel
 
+/** 迷你播放条：显示当前曲目与封面，提供播放/暂停、播放模式切换，点击进入歌词页。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlayBar(

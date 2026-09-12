@@ -35,6 +35,12 @@ import com.zuoguan.bilimusickmp.models.PlaySource
 import com.zuoguan.bilimusickmp.utils.convertImageUrl
 import kotlin.time.Duration.Companion.milliseconds
 
+/**
+ * ExoPlayer 实现的 [AudioPlayService]。
+ *
+ * 全局只维护一个 ExoPlayer；对播放器的读写都切回主线程执行，播放状态与进度通过
+ * StateFlow 暴露给 UI。
+ */
 class ExoAudioPlayService(
     context: Context,
     private val onError: (String) -> Unit = {}
@@ -50,7 +56,6 @@ class ExoAudioPlayService(
     @OptIn(UnstableApi::class)
     private val dataSourceFactory = OkHttpDataSource.Factory(okHttpClient)
 
-    // ExoPlayer 实例
     @OptIn(UnstableApi::class)
     val player: ExoPlayer = ExoPlayer.Builder(context)
         .setAudioAttributes(
@@ -130,6 +135,7 @@ class ExoAudioPlayService(
         })
 
         scope.launch {
+            // ExoPlayer 不会持续回调播放进度，位置与时长只能靠轮询同步
             while (!released) {
                 withContext(Dispatchers.Main.immediate) {
                     if (player.playbackState == Player.STATE_READY) {
@@ -241,6 +247,7 @@ class ExoAudioPlayService(
         }
     }
 
+    /** 自动续播：接上预取好的下一首，或回退到完整地起播下一首。 */
     fun autoNext(mediaItem: MediaItem?) {
         val next = getNextTrack() ?: return
         val itemId = mediaItem?.mediaId
@@ -312,8 +319,9 @@ class ExoAudioPlayService(
     }
 
     /**
-     * 下一首；无当前曲目 / 歌单为空时返回 null（调用方必须判空）。
-     * 旧实现在此处用 `!!` + `random()` + `% size`，空歌单会直接崩溃。
+     * 按当前播放模式求下一首。
+     *
+     * @return 无当前曲目或歌单为空时返回 null，调用方必须判空。
      */
     private fun getNextTrack(): TrackInfo? {
         val current = _currentTrack.value ?: return null
@@ -355,6 +363,7 @@ class ExoAudioPlayService(
         play(nextTrack)
     }
 
+    /** 按当前播放模式求上一首；无当前曲目或歌单为空时返回 null。 */
     private fun getPrevTrack(): TrackInfo? {
         val current = _currentTrack.value ?: return null
         val list = _playlist.value

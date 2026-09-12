@@ -16,6 +16,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+/**
+ * 歌词列表中的单行：当前行放大加粗并保持不透明，其余行淡化显示。
+ *
+ * @param text 该行歌词文本。
+ * @param isCurrent 是否为当前播放到的那一行。
+ * @param onClick 点击整行时的回调。
+ */
 @Composable
 fun LyricLineItem(
     text: String,

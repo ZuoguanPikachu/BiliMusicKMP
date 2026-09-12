@@ -5,9 +5,11 @@ import java.io.File
 /**
  * 应用配置目录。
  *
- * Windows 用 `%APPDATA%\BiliMusic`；其它平台退回用户主目录，
- * 避免 `System.getenv("APPDATA")` 为空时 `File(null, ...)` 抛 NPE
- * （桌面端也会打包成 Dmg / Deb，非 Windows 环境同样要能启动）。
+ * Windows 取 `%APPDATA%\BiliMusic`；`APPDATA` 可能为空，此时必须回退到
+ * 用户主目录，否则 `File(null, ...)` 会抛 NPE。桌面端还会打包成 Dmg / Deb，
+ * 非 Windows 环境同样要能启动，因此最后再退回当前目录。
+ *
+ * @throws IllegalStateException 目录无法创建时抛出。
  */
 fun getAppConfigDir(): File {
     val base = System.getenv("APPDATA")?.takeIf { it.isNotBlank() }
