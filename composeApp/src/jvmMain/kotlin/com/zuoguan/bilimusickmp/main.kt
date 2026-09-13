@@ -74,7 +74,7 @@ fun main() {
             val themeViewModel: ThemeViewModel = koinInject()
             val themeState by themeViewModel.uiState.collectAsState()
 
-            BiliMusicTheme(themeState.appliedColor) {
+            BiliMusicTheme(themeState.appliedColor, themeState.appliedDarkMode) {
                 if (!vlcFound) {
                     VlcMissingDialog()
                 }

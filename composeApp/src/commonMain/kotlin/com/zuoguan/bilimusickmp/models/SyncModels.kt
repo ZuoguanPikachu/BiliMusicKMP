@@ -144,8 +144,9 @@ object SyncKeys {
         "llm.apiKey",
         "llm.baseUrl",
         "llm.modelName",
-        // 与 services.ThemePreferences.THEME_COLOR_KEY 保持一致
-        "theme.color"
+        // 与 services.ThemePreferences 中的常量保持一致
+        "theme.color",
+        "theme.darkMode"
     )
 
     /** 仅存本地的键前缀，绝不参与同步。 */

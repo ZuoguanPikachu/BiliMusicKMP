@@ -57,6 +57,8 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.zuoguan.bilimusickmp.services.NavigationService
 import com.zuoguan.bilimusickmp.ui.theme.BiliMusicTheme
+import com.zuoguan.bilimusickmp.ui.theme.SystemBarColorEffect
+import com.zuoguan.bilimusickmp.ui.theme.isDarkTheme
 import com.zuoguan.bilimusickmp.vm.PlaylistPageViewModel
 import com.zuoguan.bilimusickmp.vm.SearchPageViewModel
 import com.zuoguan.bilimusickmp.vm.SongEditorViewModel
@@ -106,7 +108,10 @@ fun App(
     val currentPage = navigationService.currentPage
     val themeState by themeViewModel.uiState.collectAsState()
 
-    BiliMusicTheme(themeState.appliedColor) {
+    // 界面是边到边布局，系统栏图标明暗要跟着应用主题走，否则深色应用叠在浅色系统上会看不清
+    SystemBarColorEffect(themeState.appliedDarkMode.isDarkTheme())
+
+    BiliMusicTheme(themeState.appliedColor, themeState.appliedDarkMode) {
         CompositionLocalProvider(LocalSnackBarHostState provides snackBarHostState) {
             SnackbarEvents(playlistViewModel.uiEvents)
             SnackbarEvents(searchViewModel.uiEvents)

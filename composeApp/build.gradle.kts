@@ -7,18 +7,17 @@ plugins {
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.composeHotReload)
-    kotlin("plugin.serialization") version "2.3.0"
+    alias(libs.plugins.kotlinSerialization)
 }
 
-/**
- * 版本号唯一来源：gradle.properties 的 app.version。
- *
- * Android 的 versionName、桌面的 packageVersion 与本应用运行时展示/比较用的版本号
- * 都取自这一处，避免多份硬编码互相漂移。
- */
 val appVersion: String = providers.gradleProperty("app.version").get()
 
-/** 把版本号生成为 commonMain 的常量，双端读同一个值。 */
+val appVersionCode: Int = run {
+    val parts = appVersion.substringBefore("-").split(".")
+    fun part(index: Int) = parts.getOrNull(index)?.toIntOrNull() ?: 0
+    part(0) * 10_000 + part(1) * 100 + part(2)
+}
+
 val generateAppVersion by tasks.registering {
     val version = appVersion
     val outputDir = layout.buildDirectory.dir("generated/appVersion/kotlin")
@@ -54,12 +53,12 @@ kotlin {
         androidMain.dependencies {
             implementation(compose.preview)
             implementation(libs.androidx.activity.compose)
-            implementation("androidx.media3:media3-exoplayer:1.9.2")
-            implementation("androidx.media3:media3-datasource-okhttp:1.9.2")
-            implementation("androidx.media3:media3-session:1.9.2")
-            implementation("androidx.media3:media3-ui:1.9.2")
-            implementation("androidx.media3:media3-exoplayer-hls:1.9.2")
-            implementation("androidx.media3:media3-exoplayer-dash:1.9.2")
+            implementation(libs.androidx.media3.exoplayer)
+            implementation(libs.androidx.media3.datasource.okhttp)
+            implementation(libs.androidx.media3.session)
+            implementation(libs.androidx.media3.ui)
+            implementation(libs.androidx.media3.exoplayer.hls)
+            implementation(libs.androidx.media3.exoplayer.dash)
         }
         commonMain.dependencies {
             implementation(compose.runtime)
@@ -71,19 +70,18 @@ kotlin {
             implementation(libs.androidx.lifecycle.viewmodelCompose)
             implementation(libs.androidx.lifecycle.runtimeCompose)
             implementation(compose.materialIconsExtended)
-            // 由种子色生成整套 M3 色调板（主色/容器色/表面色同源），animeko 用的也是这个库
             implementation(libs.materialkolor)
-            implementation("com.squareup.okhttp3:okhttp:5.3.2")
-            implementation("org.json:json:20251224")
-            implementation("io.insert-koin:koin-core:4.1.1")
-            implementation("io.insert-koin:koin-compose:4.1.1")
-            implementation("media.kamel:kamel-image-default:1.0.9")
-            implementation("com.google.code.gson:gson:2.11.0")
-            implementation("org.jsoup:jsoup:1.22.1")
-            implementation("dev.kotbase:couchbase-lite:3.2.4-1.2.0")
-            implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
-            implementation("sh.calvin.reorderable:reorderable:3.1.0")
-            implementation("io.github.dokar3:quickjs-kt:1.0.5")
+            implementation(libs.okhttp)
+            implementation(libs.org.json)
+            implementation(libs.koin.core)
+            implementation(libs.koin.compose)
+            implementation(libs.kamel.image.default)
+            implementation(libs.gson)
+            implementation(libs.jsoup)
+            implementation(libs.kotbase.couchbase.lite)
+            implementation(libs.kotlinx.serialization.json)
+            implementation(libs.reorderable)
+            implementation(libs.quickjs.kt)
         }
         // 版本常量由 Gradle 生成后并入 commonMain，Android 与桌面共用同一份
         getByName("commonMain").kotlin.srcDir(generateAppVersion)
@@ -93,9 +91,9 @@ kotlin {
         jvmMain.dependencies {
             implementation(compose.desktop.currentOs)
             implementation(libs.kotlinx.coroutinesSwing)
-            implementation("uk.co.caprica:vlcj:4.12.1")
-            implementation("net.java.dev.jna:jna:5.18.1")
-            implementation("net.java.dev.jna:jna-platform:5.18.1")
+            implementation(libs.vlcj)
+            implementation(libs.jna)
+            implementation(libs.jna.platform)
 
         }
     }
@@ -109,7 +107,7 @@ android {
         applicationId = "com.zuoguan.bilimusickmp"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 1
+        versionCode = appVersionCode
         versionName = appVersion
     }
     packaging {

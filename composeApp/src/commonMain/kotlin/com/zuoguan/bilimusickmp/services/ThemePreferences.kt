@@ -1,6 +1,7 @@
 package com.zuoguan.bilimusickmp.services
 
 import androidx.compose.ui.graphics.Color
+import com.zuoguan.bilimusickmp.models.DarkMode
 import com.zuoguan.bilimusickmp.models.DefaultSeedColor
 import com.zuoguan.bilimusickmp.models.seedColorFromPreference
 import com.zuoguan.bilimusickmp.models.toPreferenceValue
@@ -14,6 +15,9 @@ import kotlinx.coroutines.flow.map
  */
 const val THEME_COLOR_KEY = "theme.color"
 
+/** 明暗模式在偏好存储中的键，取值为 [DarkMode.key]，同样参与云同步。 */
+const val THEME_DARK_MODE_KEY = "theme.darkMode"
+
 /**
  * 读取主题种子色，缺失或格式无法识别时回退到 [DefaultSeedColor]。
  *
@@ -25,4 +29,13 @@ fun PreferencesStorageService.observeThemeColor(): Flow<Color> =
 /** 写入主题种子色。 */
 suspend fun PreferencesStorageService.saveThemeColor(color: Color) {
     putString(THEME_COLOR_KEY, color.toPreferenceValue())
+}
+
+/** 读取明暗模式，缺失或取值无法识别时回退到 [DarkMode.fallback]。 */
+fun PreferencesStorageService.observeDarkMode(): Flow<DarkMode> =
+    observeString(THEME_DARK_MODE_KEY).map { DarkMode.fromKey(it) }
+
+/** 写入明暗模式。 */
+suspend fun PreferencesStorageService.saveDarkMode(darkMode: DarkMode) {
+    putString(THEME_DARK_MODE_KEY, darkMode.key)
 }

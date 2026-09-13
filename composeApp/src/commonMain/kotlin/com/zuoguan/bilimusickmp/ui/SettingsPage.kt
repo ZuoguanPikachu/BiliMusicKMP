@@ -24,6 +24,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -53,6 +55,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.zuoguan.bilimusickmp.LocalSnackBarHostState
+import com.zuoguan.bilimusickmp.models.DarkMode
 import com.zuoguan.bilimusickmp.models.LLMConfig
 import com.zuoguan.bilimusickmp.services.UpdateCheckResult
 import com.zuoguan.bilimusickmp.ui.theme.themeColorOptions
@@ -65,10 +68,11 @@ import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
 /**
- * 设置页：选择主题颜色，编辑 LLM 配置与云同步脚本，并手动检查新版本。
+ * 设置页：选择主题与外观，编辑 LLM 配置与云同步脚本，并手动检查新版本。
  *
- * 主题色点击即预览（全局立即变色但不落盘），确认后才保存并同步；输入框用本地状态保存
- * 未保存的编辑内容，只有点保存才写回存储，已保存的配置发生变化时再回填到输入框。
+ * 主题区的改动（明暗模式、主题色）点击即预览：全局立即变化但不落盘，确认后才保存并同步；
+ * 输入框用本地状态保存未保存的编辑内容，只有点保存才写回存储，已保存的配置发生变化时
+ * 再回填到输入框。
  */
 @Composable
 fun SettingsPage(
@@ -100,15 +104,37 @@ fun SettingsPage(
             .verticalScroll(rememberScrollState())
             .padding(contentPadding)
     ) {
-        SettingsSection(title = "主题颜色") {
+        SettingsSection(title = "主题") {
             Column(modifier = Modifier.padding(16.dp)) {
+                ThemeGroupLabel("外观")
+                Spacer(Modifier.height(8.dp))
+
+                DarkModeChips(
+                    selected = themeState.appliedDarkMode,
+                    onSelect = { themeViewModel.preview(it) }
+                )
+
+                Spacer(Modifier.height(16.dp))
+
+                ThemeGroupLabel("主题颜色")
+                Spacer(Modifier.height(8.dp))
+
                 ThemeColorPicker(
                     selected = themeState.appliedColor,
                     onSelect = { themeViewModel.preview(it) }
                 )
 
+                // 外观与颜色共用一份预览，任一项改动后都是同一个「保存」生效
                 if (themeState.hasPendingPreview) {
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(12.dp))
+
+                    Text(
+                        text = "预览中，尚未保存",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+
+                    Spacer(Modifier.height(12.dp))
 
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(onClick = { themeViewModel.confirmPreview() }) {
@@ -345,8 +371,50 @@ private fun SettingsSection(
     }
 }
 
+/** 主题分区里的小标题，用于区分「外观」与「主题颜色」两组设置。 */
+@Composable
+private fun ThemeGroupLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+}
+
 /**
- * 主题色选择器：把候选种子色平铺成色块，点击即应用。
+ * 明暗模式选择：跟随系统 / 浅色 / 深色。
+ *
+ * 只改预览状态，确认后才保存（与主题色共用同一个「保存」）。
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun DarkModeChips(
+    selected: DarkMode,
+    onSelect: (DarkMode) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    FlowRow(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        DarkMode.entries.forEach { mode ->
+            AssistChip(
+                onClick = { onSelect(mode) },
+                label = { Text(mode.label) },
+                colors = AssistChipDefaults.assistChipColors(
+                    containerColor = if (mode == selected) MaterialTheme.colorScheme.primaryContainer
+                    else MaterialTheme.colorScheme.surface,
+                    labelColor = if (mode == selected) MaterialTheme.colorScheme.onPrimaryContainer
+                    else MaterialTheme.colorScheme.onSurface
+                )
+            )
+        }
+    }
+}
+
+/**
+ * 主题色选择器：把候选种子色平铺成色块，点击即预览。
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
