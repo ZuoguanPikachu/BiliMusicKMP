@@ -138,10 +138,11 @@ class BiliService {
      * 搜索接口只认关键词，直接拿链接当关键词搜不到东西，所以这里先把链接归一成 BV 号：
      * b23.tv 短链需要跟随重定向拿到真实 URL，完整视频链接则可以直接提取 BV 号。
      *
+     * @param page 页码，从 1 开始；超出最后一页时接口返回空结果。
      * @return 只保留 type 为 video 的结果；标题已去掉接口返回的 HTML 高亮标签。
      * @throws Exception 接口请求失败或返回的 JSON 结构不符合预期时。
      */
-    suspend fun search(keyword: String): List<SearchResult> {
+    suspend fun search(keyword: String, page: Int = 1): List<SearchResult> {
         try {
             ensureWbiReady()
 
@@ -162,7 +163,13 @@ class BiliService {
                 }
             }
 
-            val params = encWbi(mutableMapOf("search_type" to "video", "keyword" to actualKeyword))
+            val params = encWbi(
+                mutableMapOf(
+                    "search_type" to "video",
+                    "keyword" to actualKeyword,
+                    "page" to page.toString()
+                )
+            )
             val url = "https://api.bilibili.com/x/web-interface/wbi/search/type?" +
                     params.entries.joinToString("&") { "${it.key}=${it.value}" }
 

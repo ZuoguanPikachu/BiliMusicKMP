@@ -3,6 +3,7 @@ package com.zuoguan.bilimusickmp.ui
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
@@ -131,7 +132,22 @@ fun SearchPage(
                                 onAddButtonClick = ::openSongEditor
                             )
                         }
+
+                        // 底部状态跨满整行，否则只会占一个卡片的宽度
+                        if (state.results.isNotEmpty() && (state.isLoadingMore || state.endReached)) {
+                            item(key = "loadMore", span = { GridItemSpan(maxLineSpan) }) {
+                                SearchLoadMoreFooter(
+                                    isLoadingMore = state.isLoadingMore,
+                                    endReached = state.endReached
+                                )
+                            }
+                        }
                     }
+
+                    viewModel.lazyGridState.LoadMoreOnReachBottom(
+                        enabled = !state.isLoadingMore && !state.endReached,
+                        onLoadMore = viewModel::loadMore
+                    )
                 } else {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
@@ -145,7 +161,21 @@ fun SearchPage(
                                 onAddButtonClick = ::openSongEditor
                             )
                         }
+
+                        if (state.results.isNotEmpty() && (state.isLoadingMore || state.endReached)) {
+                            item(key = "loadMore") {
+                                SearchLoadMoreFooter(
+                                    isLoadingMore = state.isLoadingMore,
+                                    endReached = state.endReached
+                                )
+                            }
+                        }
                     }
+
+                    viewModel.lazyListState.LoadMoreOnReachBottom(
+                        enabled = !state.isLoadingMore && !state.endReached,
+                        onLoadMore = viewModel::loadMore
+                    )
                 }
             }
         }

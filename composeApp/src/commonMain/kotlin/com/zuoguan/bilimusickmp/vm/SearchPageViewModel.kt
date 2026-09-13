@@ -25,6 +25,9 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+/** 每页请求的结果条数：B 站是页码分页，网易云/酷狗按它换算偏移与页码。 */
+private const val PAGE_SIZE = 20
+
 /**
  * 搜索页状态。
  *
@@ -46,7 +49,7 @@ class SearchPageViewModel(
     private val _uiState = MutableStateFlow(SearchUiState())
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
 
-    // 当前进行中的搜索；新搜索会先取消它
+    // 当前进行中的搜索（含加载下一页）；新搜索会先取消它
     private var searchJob: Job? = null
 
     private val _uiEvents = Channel<UiEvent>(Channel.BUFFERED)
@@ -64,9 +67,9 @@ class SearchPageViewModel(
     }
 
     /**
-     * 按当前关键词与音源搜索。
+     * 按当前关键词与音源搜索第一页。
      *
-     * 新搜索会先取消上一次未完成的请求，避免旧结果覆盖新结果。
+     * 会先清空旧结果并取消上一次未完成的请求，避免旧结果覆盖新结果。
      */
     fun search() {
         val state = _uiState.value
@@ -74,39 +77,104 @@ class SearchPageViewModel(
         if (keyword.isBlank()) return
 
         searchJob?.cancel()
-        _uiState.value = _uiState.value.copy(
+        _uiState.value = state.copy(
             isSearchLoading = true,
-            searchError = null
+            isLoadingMore = false,
+            searchError = null,
+            results = emptyList(),
+            page = 1,
+            endReached = false
         )
 
         searchJob = scope.launch {
-            try {
-                val result = when (state.audioSource) {
-                    AudioSource.BILI_BILI ->
-                        biliService.search(keyword)
-                            .map { it.copy(audioSource = AudioSource.BILI_BILI) }
+            loadPage(keyword, state.audioSource, page = 1, append = false)
+        }
+    }
 
-                    AudioSource.NET_EASE ->
-                        netEaseService.search(keyword)
-                            .map { it.copy(audioSource = AudioSource.NET_EASE) }
+    /**
+     * 触底加载下一页，结果追加在已有结果之后。
+     *
+     * 界面上的触底回调可能连续触发，这里用 [SearchUiState.isLoadingMore] 与
+     * [SearchUiState.endReached] 去重，重复调用会直接返回。
+     */
+    fun loadMore() {
+        val state = _uiState.value
+        val keyword = state.keyword.trim()
+        if (keyword.isBlank() ||
+            state.isSearchLoading ||
+            state.isLoadingMore ||
+            state.endReached
+        ) {
+            return
+        }
 
-                    AudioSource.KU_GOU -> {
-                        kuGouService.search(keyword)
-                    }
+        _uiState.update { it.copy(isLoadingMore = true) }
+
+        searchJob = scope.launch {
+            loadPage(keyword, state.audioSource, page = state.page + 1, append = true)
+        }
+    }
+
+    /**
+     * 拉取某一页结果并写入状态。
+     *
+     * @param append true 表示为 [loadMore] 追加结果，false 表示新搜索、整体替换结果。
+     */
+    private suspend fun loadPage(
+        keyword: String,
+        audioSource: AudioSource,
+        page: Int,
+        append: Boolean
+    ) {
+        try {
+            val result = when (audioSource) {
+                AudioSource.BILI_BILI ->
+                    biliService.search(keyword, page)
+                        .map { it.copy(audioSource = AudioSource.BILI_BILI) }
+
+                AudioSource.NET_EASE ->
+                    netEaseService.search(
+                        s = keyword,
+                        offset = (page - 1) * PAGE_SIZE,
+                        limit = PAGE_SIZE
+                    ).map { it.copy(audioSource = AudioSource.NET_EASE) }
+
+                AudioSource.KU_GOU ->
+                    kuGouService.search(keyword, pageSize = PAGE_SIZE, page = page)
+            }
+
+            _uiState.update { current ->
+                val results = if (append) {
+                    // 分页接口偶尔会重复返回上一条，按 id 去重避免界面出现重复项
+                    (current.results + result).distinctBy { it.id }
+                } else {
+                    result
                 }
 
+                current.copy(
+                    isSearchLoading = false,
+                    isLoadingMore = false,
+                    results = results,
+                    page = page,
+                    // 空页说明没有下一页；追加时一条新结果都没多出来（例如接口忽略了 page 参数）
+                    // 也算到底，否则触底回调会一直重复请求同一页
+                    endReached = result.isEmpty() || results.size == current.results.size
+                )
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            if (append) {
+                // 加载下一页失败不动已有结果，只提示一次
+                _uiState.update { it.copy(isLoadingMore = false) }
+                _uiEvents.send(
+                    UiEvent.ShowSnackBar(message = (e.message ?: "加载失败") + "，请重试")
+                )
+            } else {
                 _uiState.update {
                     it.copy(
                         isSearchLoading = false,
-                        results = result
-                    )
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(
-                        isSearchLoading = false,
+                        isLoadingMore = false,
                         searchError = e.message ?: "搜索失败"
                     )
                 }
@@ -179,6 +247,12 @@ data class SearchUiState(
     val keyword: String = "",
     val audioSource: AudioSource = AudioSource.BILI_BILI,
     val isSearchLoading: Boolean = false,
+    /** 正在加载下一页；列表底部据此显示转圈。 */
+    val isLoadingMore: Boolean = false,
     val results: List<SearchResult> = emptyList(),
+    /** 已加载到第几页，从 1 开始。 */
+    val page: Int = 1,
+    /** 已经到最后一页，触底不再请求。 */
+    val endReached: Boolean = false,
     val searchError: String? = null
 )

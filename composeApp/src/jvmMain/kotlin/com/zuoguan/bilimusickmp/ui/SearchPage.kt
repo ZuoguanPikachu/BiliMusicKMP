@@ -31,8 +31,9 @@ fun SearchPage(
     val state by viewModel.uiState.collectAsState()
     val editorState by songEditorViewModel.uiState.collectAsState()
 
+    // 换关键词重新搜索时回到顶部；触底加载是往后面追加（page > 1），不能把用户拉回来
     LaunchedEffect(state.results) {
-        if (state.results.isNotEmpty()) {
+        if (state.page == 1 && state.results.isNotEmpty()) {
             viewModel.lazyGridState.scrollToItem(0)
         }
     }
@@ -133,7 +134,22 @@ fun SearchPage(
                             onAddButtonClick = { songEditorViewModel.openForCreate(it.toSong()) }
                         )
                     }
+
+                    // 底部状态跨满整行，否则只会占一个卡片的宽度
+                    if (state.results.isNotEmpty() && (state.isLoadingMore || state.endReached)) {
+                        item(key = "loadMore", span = { GridItemSpan(maxLineSpan) }) {
+                            SearchLoadMoreFooter(
+                                isLoadingMore = state.isLoadingMore,
+                                endReached = state.endReached
+                            )
+                        }
+                    }
                 }
+
+                viewModel.lazyGridState.LoadMoreOnReachBottom(
+                    enabled = !state.isLoadingMore && !state.endReached,
+                    onLoadMore = viewModel::loadMore
+                )
             }
         }
     }
