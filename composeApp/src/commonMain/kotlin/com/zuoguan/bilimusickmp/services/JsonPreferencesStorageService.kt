@@ -7,6 +7,7 @@ import com.zuoguan.bilimusickmp.utils.readTextFile
 import com.zuoguan.bilimusickmp.utils.writeTextFileAtomic
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -40,8 +41,7 @@ class JsonPreferencesStorageService(
 
     private val _map = MutableStateFlow<Map<String, String>>(emptyMap())
 
-    @Volatile
-    private var syncUpdatedAt = 0L
+    private val _syncUpdatedAt = MutableStateFlow(0L)
 
     init {
         load()
@@ -53,7 +53,7 @@ class JsonPreferencesStorageService(
         try {
             val parsed = json.decodeFromString<PrefsFileContent>(raw)
             _map.value = parsed.values
-            syncUpdatedAt = parsed.syncUpdatedAt
+            _syncUpdatedAt.value = parsed.syncUpdatedAt
         } catch (e: Exception) {
             // 解析失败时保留原始文件（下次写入前不会覆盖），并打印以便排查
             println("偏好文件解析失败，已忽略: ${e.message}")
@@ -61,7 +61,7 @@ class JsonPreferencesStorageService(
     }
 
     private suspend fun persist() {
-        writeTextFileAtomic(filePath, json.encodeToString(PrefsFileContent(_map.value, syncUpdatedAt)))
+        writeTextFileAtomic(filePath, json.encodeToString(PrefsFileContent(_map.value, _syncUpdatedAt.value)))
     }
 
     /** 只有同步白名单内的键（且不带 local. 前缀）才推进同步版本号。 */
@@ -76,7 +76,7 @@ class JsonPreferencesStorageService(
         }
         _map.value = newValue
         if (isSyncable(key)) {
-            syncUpdatedAt = maxOf(currentTimeMillis(), syncUpdatedAt + 1)
+            _syncUpdatedAt.value = maxOf(currentTimeMillis(), _syncUpdatedAt.value + 1)
         }
         persist()
     }
@@ -117,17 +117,19 @@ class JsonPreferencesStorageService(
 
     // ---------- 云同步支持 ----------
 
-    override suspend fun syncUpdatedAt(): Long = syncUpdatedAt
+    override suspend fun syncUpdatedAt(): Long = _syncUpdatedAt.value
+
+    override fun observeSyncUpdatedAt(): Flow<Long> = _syncUpdatedAt.asStateFlow()
 
     override suspend fun syncablePayload(): SyncPrefs = mutex.withLock {
         SyncPrefs(
-            updatedAt = syncUpdatedAt,
+            updatedAt = _syncUpdatedAt.value,
             values = _map.value.filterKeys { isSyncable(it) }
         )
     }
 
     override suspend fun applySyncable(prefs: SyncPrefs): Long = mutex.withLock {
-        if (prefs.updatedAt < syncUpdatedAt) return@withLock Long.MIN_VALUE
+        if (prefs.updatedAt < _syncUpdatedAt.value) return@withLock Long.MIN_VALUE
         val newMap = _map.value.toMutableMap()
         for ((k, v) in prefs.values) {
             if (isSyncable(k)) {
@@ -135,7 +137,7 @@ class JsonPreferencesStorageService(
             }
         }
         _map.value = newMap
-        syncUpdatedAt = prefs.updatedAt
+        _syncUpdatedAt.value = prefs.updatedAt
         persist()
         prefs.updatedAt
     }

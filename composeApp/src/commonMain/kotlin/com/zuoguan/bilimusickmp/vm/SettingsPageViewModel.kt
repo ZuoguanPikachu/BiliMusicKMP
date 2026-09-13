@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
  * 设置页状态。
  *
  * 汇集 LLM 配置、云同步脚本与同步状态，并把编辑结果写回各自的存储服务。
+ * 主题色由 [ThemeViewModel] 单独管理（需要预览/确认两层状态）。
  */
 class SettingsPageViewModel(
     private val preferencesStorageService: PreferencesStorageService,

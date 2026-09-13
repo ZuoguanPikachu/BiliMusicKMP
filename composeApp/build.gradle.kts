@@ -40,6 +40,8 @@ kotlin {
             implementation(libs.androidx.lifecycle.viewmodelCompose)
             implementation(libs.androidx.lifecycle.runtimeCompose)
             implementation(compose.materialIconsExtended)
+            // 由种子色生成整套 M3 色调板（主色/容器色/表面色同源），animeko 用的也是这个库
+            implementation(libs.materialkolor)
             implementation("com.squareup.okhttp3:okhttp:5.3.2")
             implementation("org.json:json:20251224")
             implementation("io.insert-koin:koin-core:4.1.1")

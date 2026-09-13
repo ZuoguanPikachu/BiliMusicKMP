@@ -50,13 +50,17 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.zuoguan.bilimusickmp.services.NavigationService
+import com.zuoguan.bilimusickmp.ui.theme.BiliMusicTheme
 import com.zuoguan.bilimusickmp.vm.PlaylistPageViewModel
 import com.zuoguan.bilimusickmp.vm.SearchPageViewModel
 import com.zuoguan.bilimusickmp.vm.SongEditorViewModel
+import com.zuoguan.bilimusickmp.vm.ThemeViewModel
 import com.zuoguan.bilimusickmp.ui.LyricsPage
 import com.zuoguan.bilimusickmp.ui.PlayBar
 import com.zuoguan.bilimusickmp.ui.PlaylistPage
@@ -95,56 +99,60 @@ fun App(
     navigationService: NavigationService = koinInject(),
     playlistViewModel: PlaylistPageViewModel = koinInject(),
     searchViewModel: SearchPageViewModel = koinInject(),
-    songEditorViewModel: SongEditorViewModel = koinInject()
+    songEditorViewModel: SongEditorViewModel = koinInject(),
+    themeViewModel: ThemeViewModel = koinInject()
 ) {
     val snackBarHostState = remember { SnackbarHostState() }
     val currentPage = navigationService.currentPage
+    val themeState by themeViewModel.uiState.collectAsState()
 
-    CompositionLocalProvider(LocalSnackBarHostState provides snackBarHostState) {
-        SnackbarEvents(playlistViewModel.uiEvents)
-        SnackbarEvents(searchViewModel.uiEvents)
-        SnackbarEvents(songEditorViewModel.uiEvents)
+    BiliMusicTheme(themeState.appliedColor) {
+        CompositionLocalProvider(LocalSnackBarHostState provides snackBarHostState) {
+            SnackbarEvents(playlistViewModel.uiEvents)
+            SnackbarEvents(searchViewModel.uiEvents)
+            SnackbarEvents(songEditorViewModel.uiEvents)
 
-        Scaffold(
-            snackbarHost = { SnackbarHost(snackBarHostState) },
-            bottomBar = {
-                AnimatedVisibility(
-                    visible = currentPage != Page.LYRICS && currentPage != Page.SONG_EDIT,
-                    enter = slideInVertically(
-                        initialOffsetY = { it },
-                    ),
-                    exit = slideOutVertically(
-                        targetOffsetY = { it },
-                    )
+            Scaffold(
+                snackbarHost = { SnackbarHost(snackBarHostState) },
+                bottomBar = {
+                    AnimatedVisibility(
+                        visible = currentPage != Page.LYRICS && currentPage != Page.SONG_EDIT,
+                        enter = slideInVertically(
+                            initialOffsetY = { it },
+                        ),
+                        exit = slideOutVertically(
+                            targetOffsetY = { it },
+                        )
+                    ) {
+                        BottomNavigationBar(
+                            selected = currentPage,
+                            onSelect = { navigationService.reset(it) }
+                        )
+                    }
+
+                },
+                floatingActionButton = {
+                    AnimatedVisibility(
+                        visible = currentPage != Page.LYRICS && currentPage != Page.SONG_EDIT,
+                        enter = fadeIn() + expandIn(),
+                        exit = shrinkOut() + fadeOut()
+                    ) {
+                        PlayBar()
+                    }
+                },
+                floatingActionButtonPosition = FabPosition.Center,
+            ) { innerPadding ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
                 ) {
-                    BottomNavigationBar(
-                        selected = currentPage,
-                        onSelect = { navigationService.reset(it) }
+                    ContentArea(
+                        page = currentPage,
+                        innerPadding = innerPadding,
+                        modifier = Modifier.weight(1f)
                     )
                 }
-
-            },
-            floatingActionButton = {
-                AnimatedVisibility(
-                    visible = currentPage != Page.LYRICS && currentPage != Page.SONG_EDIT,
-                    enter = fadeIn() + expandIn(),
-                    exit = shrinkOut() + fadeOut()
-                ) {
-                    PlayBar()
-                }
-            },
-            floatingActionButtonPosition = FabPosition.Center,
-        ) { innerPadding ->
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-            ) {
-                ContentArea(
-                    page = currentPage,
-                    innerPadding = innerPadding,
-                    modifier = Modifier.weight(1f)
-                )
             }
         }
     }

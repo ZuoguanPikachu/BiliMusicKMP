@@ -17,10 +17,12 @@ import com.zuoguan.bilimusickmp.di.appModule
 import com.zuoguan.bilimusickmp.models.Page
 import com.zuoguan.bilimusickmp.services.AudioPlayService
 import com.zuoguan.bilimusickmp.ui.*
+import com.zuoguan.bilimusickmp.ui.theme.BiliMusicTheme
 import com.zuoguan.bilimusickmp.utils.getAppConfigDir
 import com.zuoguan.bilimusickmp.vm.PlaylistPageViewModel
 import com.zuoguan.bilimusickmp.vm.SearchPageViewModel
 import com.zuoguan.bilimusickmp.vm.SongEditorViewModel
+import com.zuoguan.bilimusickmp.vm.ThemeViewModel
 import kotbase.CouchbaseLite
 import org.jetbrains.compose.resources.painterResource
 import org.koin.compose.koinInject
@@ -69,7 +71,10 @@ fun main() {
             state = rememberWindowState(width = 1400.dp, height = 900.dp),
             icon = painterResource(Res.drawable.bili_music)
         ) {
-            MaterialTheme {
+            val themeViewModel: ThemeViewModel = koinInject()
+            val themeState by themeViewModel.uiState.collectAsState()
+
+            BiliMusicTheme(themeState.appliedColor) {
                 if (!vlcFound) {
                     VlcMissingDialog()
                 }

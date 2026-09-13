@@ -20,6 +20,7 @@ import com.zuoguan.bilimusickmp.vm.PlaylistPageViewModel
 import com.zuoguan.bilimusickmp.vm.SearchPageViewModel
 import com.zuoguan.bilimusickmp.vm.SettingsPageViewModel
 import com.zuoguan.bilimusickmp.vm.SongEditorViewModel
+import com.zuoguan.bilimusickmp.vm.ThemeViewModel
 import org.koin.dsl.module
 import java.io.File
 
@@ -55,4 +56,6 @@ val appModule = module {
     single { PlayBarViewModel(get()) }
     single { LyricsPageViewModel(get(), get()) }
     single { SettingsPageViewModel(get(), get(), get()) }
+    // 主题色由根组件订阅，与设置页共用同一份偏好
+    single { ThemeViewModel(get()) }
 }

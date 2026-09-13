@@ -143,7 +143,9 @@ object SyncKeys {
     val PREF_KEYS: Set<String> = setOf(
         "llm.apiKey",
         "llm.baseUrl",
-        "llm.modelName"
+        "llm.modelName",
+        // 与 services.ThemePreferences.THEME_COLOR_KEY 保持一致
+        "theme.color"
     )
 
     /** 仅存本地的键前缀，绝不参与同步。 */

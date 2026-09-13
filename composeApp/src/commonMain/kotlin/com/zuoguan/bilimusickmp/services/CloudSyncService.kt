@@ -20,6 +20,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlin.concurrent.Volatile
 import kotlin.random.Random
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -55,6 +56,11 @@ data class SyncUiState(
  * - 推送前后校验 head：推送后 head 若已被并发推进，则拉取合并后重推
  *   （自愈，最多 [MAX_HEAL_ROUNDS] 轮）；
  * - 每 [SNAPSHOT_EVERY] 个版本生成一次全量快照，拉取端增量链超过 [CHAIN_LIMIT] 时走快照路径。
+ *
+ * 同步时机（拉取与推送都在同一次 [syncNow] 里，先拉后推）：
+ * - 歌曲变更、偏好变更（主题色 / LLM 配置等）：防抖 [DEBOUNCE_MS] 后同步；
+ * - 云同步脚本加载完成、应用启动后：立即同步。
+ * 除此之外没有轮询，因此其他设备的新数据要等本设备下一次同步才会生效。
  */
 class CloudSyncService(
     private val engine: JsEngineService,
@@ -78,10 +84,24 @@ class CloudSyncService(
 
     private var debounceJob: Job? = null
 
+    /** 最近一次从云端应用的偏好版本号，用于区分「远端刚应用」与「本地新变更」。 */
+    @Volatile
+    private var lastAppliedPrefsVersion = SongRepositoryService.NO_APPLY
+
     init {
         scope.launch {
             repository.userChanges.collect {
                 scheduleSync()
+            }
+        }
+        scope.launch {
+            // 偏好（主题色、LLM 配置等）变更同样要及时推送，不再等下一次歌曲变更顺带带上。
+            // 应用云端偏好也会改变版本号，但那是远端数据，跳过以免自己触发自己。
+            prefs.observeSyncUpdatedAt().collect { version ->
+                if (version == lastAppliedPrefsVersion) return@collect
+                if (version > prefs.getLong(SyncKeys.LOCAL_WATERMARK)) {
+                    scheduleSync()
+                }
             }
         }
         scope.launch {
@@ -109,7 +129,7 @@ class CloudSyncService(
         }
     }
 
-    /** 手动触发同步（设置页「立即同步」）。 */
+    /** 立即同步一次：先拉取远端新版本，再推送本地脏数据。 */
     suspend fun syncNow() {
         syncMutex.withLock {
             try {
@@ -221,7 +241,7 @@ class CloudSyncService(
         val snapshot = json.decodeFromString<SyncSnapshot>(raw)
         var applied = repository.applyRemoteSongs(snapshot.songs)
         applied = maxOf(applied, repository.applyRemoteOrder(snapshot.order))
-        applied = maxOf(applied, prefs.applySyncable(snapshot.prefs))
+        applied = maxOf(applied, applyRemotePrefs(snapshot.prefs))
         bumpWatermark(applied)
         return snapshot.v
     }
@@ -232,8 +252,24 @@ class CloudSyncService(
         val delta = json.decodeFromString<SyncDelta>(raw)
         var applied = repository.applyRemoteSongs(delta.songs)
         applied = maxOf(applied, repository.applyRemoteOrder(delta.order))
-        applied = maxOf(applied, delta.prefs?.let { prefs.applySyncable(it) } ?: SongRepositoryService.NO_APPLY)
+        applied = maxOf(applied, applyRemotePrefs(delta.prefs))
         bumpWatermark(applied)
+    }
+
+    /**
+     * 应用远端偏好，并记下版本号。
+     *
+     * 记录是为了让偏好监听能区分「这次版本变化来自远端应用」与「用户刚改了偏好」，
+     * 避免应用完远端数据后又排一次多余的同步。
+     *
+     * @return 实际应用到的版本号；未应用返回 [SongRepositoryService.NO_APPLY]。
+     */
+    private suspend fun applyRemotePrefs(payload: SyncPrefs?): Long {
+        val applied = payload?.let { prefs.applySyncable(it) } ?: SongRepositoryService.NO_APPLY
+        if (applied != SongRepositoryService.NO_APPLY) {
+            lastAppliedPrefsVersion = applied
+        }
+        return applied
     }
 
     /**

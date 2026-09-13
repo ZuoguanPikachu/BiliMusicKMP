@@ -42,6 +42,14 @@ interface PreferencesStorageService {
     /** 可同步键的最新版本号（本地变更时递增）。 */
     suspend fun syncUpdatedAt(): Long
 
+    /**
+     * 可同步键版本号的变化流。
+     *
+     * 本地修改任一可同步键、或应用了云端偏好时都会发射；云同步服务据此在偏好变更后
+     * 及时推送，而不是等下一次歌曲变更顺带带上。
+     */
+    fun observeSyncUpdatedAt(): Flow<Long>
+
     /** 当前可同步键的载荷。 */
     suspend fun syncablePayload(): SyncPrefs
 
