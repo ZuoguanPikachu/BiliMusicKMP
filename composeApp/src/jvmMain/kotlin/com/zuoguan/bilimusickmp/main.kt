@@ -18,6 +18,8 @@ import com.zuoguan.bilimusickmp.models.Page
 import com.zuoguan.bilimusickmp.services.AudioPlayService
 import com.zuoguan.bilimusickmp.ui.*
 import com.zuoguan.bilimusickmp.ui.theme.BiliMusicTheme
+import com.zuoguan.bilimusickmp.ui.theme.WindowTitleBarThemeEffect
+import com.zuoguan.bilimusickmp.ui.theme.isDarkTheme
 import com.zuoguan.bilimusickmp.utils.getAppConfigDir
 import com.zuoguan.bilimusickmp.vm.PlaylistPageViewModel
 import com.zuoguan.bilimusickmp.vm.SearchPageViewModel
@@ -73,6 +75,9 @@ fun main() {
         ) {
             val themeViewModel: ThemeViewModel = koinInject()
             val themeState by themeViewModel.uiState.collectAsState()
+
+            // 原生标题栏不在 Compose 里，需要单独把深浅色同步过去
+            WindowTitleBarThemeEffect(window, themeState.appliedDarkMode.isDarkTheme())
 
             BiliMusicTheme(themeState.appliedColor, themeState.appliedDarkMode) {
                 if (!vlcFound) {
