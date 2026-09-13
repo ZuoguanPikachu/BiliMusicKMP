@@ -13,7 +13,6 @@ import com.zuoguan.bilimusickmp.services.NetEaseService
 import com.zuoguan.bilimusickmp.services.PreferencesStorageService
 import com.zuoguan.bilimusickmp.services.SongMetadataService
 import com.zuoguan.bilimusickmp.services.SongRepositoryService
-import com.zuoguan.bilimusickmp.utils.migrateLegacyAndroidPreferences
 import com.zuoguan.bilimusickmp.vm.LyricsPageViewModel
 import com.zuoguan.bilimusickmp.vm.PlayBarViewModel
 import com.zuoguan.bilimusickmp.vm.PlaylistPageViewModel
@@ -30,7 +29,6 @@ val appModule = module {
     single { KuGouService() }
     single { JsEngineService(File(androidContext().filesDir, "cloud_sync_script.js")) }
     single<PreferencesStorageService> {
-        migrateLegacyAndroidPreferences(androidContext())
         JsonPreferencesStorageService(File(androidContext().filesDir, "preferences.json").absolutePath)
     }
     single { ExtractSongBaseInfoService(get()) }

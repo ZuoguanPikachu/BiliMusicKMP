@@ -23,7 +23,6 @@ kotlin {
         androidMain.dependencies {
             implementation(compose.preview)
             implementation(libs.androidx.activity.compose)
-            implementation("androidx.datastore:datastore-preferences:1.2.0")
             implementation("androidx.media3:media3-exoplayer:1.9.2")
             implementation("androidx.media3:media3-datasource-okhttp:1.9.2")
             implementation("androidx.media3:media3-session:1.9.2")

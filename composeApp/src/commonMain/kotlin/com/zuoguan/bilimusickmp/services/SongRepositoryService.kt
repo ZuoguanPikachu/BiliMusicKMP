@@ -11,7 +11,6 @@ import com.zuoguan.bilimusickmp.utils.DatabaseHelper
 import com.zuoguan.bilimusickmp.utils.currentTimeMillis
 import kotbase.Collection
 import kotbase.DataSource
-import kotbase.Document
 import kotbase.MutableArray
 import kotbase.MutableDocument
 import kotbase.QueryBuilder
@@ -83,7 +82,6 @@ class SongRepositoryService {
     // ---------- 本地 CRUD ----------
 
     fun loadSongs() {
-        ensureOrderIndex()
         val rows = queryAllRows()
         val orderIds = getOrderIds()
         val songList = rows.mapNotNull { row ->
@@ -120,44 +118,26 @@ class SongRepositoryService {
         _userChanges.tryEmit(Unit)
     }
 
-    fun getSongById(id: String): Song? {
-        val doc = coll.getDocument(id) ?: return null
-        return docToSong(doc, getOrderIds())
-    }
+    /** 按 id 取歌曲：命中的一定在 [songs] 里，直接查已加载的列表，无需再读数据库。 */
+    fun getSongById(id: String): Song? = _songs.value.firstOrNull { it.id == id }
 
     /** 重新排序：只调整传入歌曲彼此的相对位次，未传入的歌曲保持原位。 */
     suspend fun persistOrder(songs: List<Song>) {
-        applyOrderIds(songs.map { it.id }, bump = true)
+        applyOrderIds(songs.map { it.id })
         loadSongs()
         _userChanges.tryEmit(Unit)
     }
 
     // ---------- 顺序（~order 元文档） ----------
 
-    private fun ensureOrderIndex() {
-        if (coll.getDocument(ORDER_DOC_ID) != null) return
-        // 从存量文档推导初始顺序：老文档遗留的 ts 字段仅用于确定初始位次，缺失时按文档 id 排序。
-        val rows = queryAllRows().filter { row ->
-            val id = row.getString("id") ?: return@filter false
-            !isMetaId(id)
-        }
-        val sorted = rows.sortedWith(
-            compareBy({ it.getLong("ts") }, { it.getString("id") ?: "" })
-        )
-        coll.save(
-            MutableDocument(ORDER_DOC_ID)
-                .setArray("ids", MutableArray(sorted.map { it.getString("id")!! }))
-                .setLong("updatedAt", 0L)
-        )
-    }
-
     private fun getOrderIds(): List<String> {
         val doc = coll.getDocument(ORDER_DOC_ID) ?: return emptyList()
         return doc.getArray("ids")?.toList()?.mapNotNull { it.toString() } ?: emptyList()
     }
 
+    /** 顺序版本；尚无 `~order` 文档时按基线 0 处理，任何远端版本都能覆盖它。 */
     private fun getOrderUpdatedAt(): Long =
-        coll.getDocument(ORDER_DOC_ID)?.getLong("updatedAt") ?: -1L
+        coll.getDocument(ORDER_DOC_ID)?.getLong("updatedAt") ?: 0L
 
     private fun appendToOrder(id: String) {
         val ids = getOrderIds().toMutableList()
@@ -173,9 +153,9 @@ class SongRepositoryService {
         }
     }
 
-    private fun applyOrderIds(ids: List<String>, bump: Boolean) {
-        val merged = mergeSubsetOrder(getOrderIds(), ids)
-        coll.save(orderDocument(merged, if (bump) nextClock() else getOrderUpdatedAt()))
+    /** 覆盖这些歌曲的相对位次；版本抬到 [nextClock] 以标记顺序为待推送的脏数据。 */
+    private fun applyOrderIds(ids: List<String>) {
+        coll.save(orderDocument(mergeSubsetOrder(getOrderIds(), ids), nextClock()))
     }
 
     private fun mergeSubsetOrder(existing: List<String>, subsetIds: List<String>): List<String> {
@@ -197,62 +177,47 @@ class SongRepositoryService {
 
     // ---------- 云同步：脏数据收集 / 快照 / 远端合并 ----------
 
+    /** 读取全部歌曲（已删除的以墓碑形式返回），供脏数据收集与全量快照共用。 */
+    private fun readAllSongs(): List<SongDto> {
+        val songs = mutableListOf<SongDto>()
+        for (row in queryAllRows()) {
+            val id = row.getString("id") ?: continue
+            if (isMetaId(id)) continue
+            val updatedAt = row.getLong("updatedAt")
+            songs += if (id.startsWith(TOMBSTONE_PREFIX)) {
+                SongDto(id = id.removePrefix(TOMBSTONE_PREFIX), updatedAt = updatedAt, deleted = true)
+            } else {
+                rowToDto(row, id, updatedAt)
+            }
+        }
+        return songs
+    }
+
+    /** 读取当前顺序。 */
+    private fun readOrder(): SyncOrder = SyncOrder(updatedAt = getOrderUpdatedAt(), ids = getOrderIds())
+
     /**
      * 收集相对 [watermark] 的脏数据（已删除歌曲以墓碑形式返回）。
      *
      * @param forceFull 首次推送时传 true：无论 watermark 高低都全量收集，保证对端拿到基线数据。
      */
     suspend fun collectDirty(watermark: Long, forceFull: Boolean): DirtySync {
-        val rows = queryAllRows()
-        val songs = mutableListOf<SongDto>()
-        for (row in rows) {
-            val id = row.getString("id") ?: continue
-            if (id == ORDER_DOC_ID) continue
-            val updatedAt = row.getLong("updatedAt")
-            if (!forceFull && updatedAt <= watermark) continue
-            if (id.startsWith(TOMBSTONE_PREFIX)) {
-                songs += SongDto(
-                    id = id.removePrefix(TOMBSTONE_PREFIX),
-                    updatedAt = updatedAt,
-                    deleted = true
-                )
-            } else if (!isMetaId(id)) {
-                songs += rowToDto(row, id, updatedAt)
-            }
-        }
-        val orderUpdatedAt = getOrderUpdatedAt()
-        val order = if (forceFull || orderUpdatedAt > watermark) {
-            SyncOrder(updatedAt = orderUpdatedAt.coerceAtLeast(0), ids = getOrderIds())
-        } else null
-        return DirtySync(songs, order)
+        val songs = readAllSongs()
+        val order = readOrder()
+        return DirtySync(
+            songs = if (forceFull) songs else songs.filter { it.updatedAt > watermark },
+            order = order.takeIf { forceFull || it.updatedAt > watermark }
+        )
     }
 
     /** 构建全量快照（含歌曲、顺序、墓碑；偏好由偏好存储单独提供）。 */
-    suspend fun buildSnapshot(deviceId: String, v: Long, ts: Long): SyncSnapshot {
-        val rows = queryAllRows()
-        val songs = mutableListOf<SongDto>()
-        for (row in rows) {
-            val id = row.getString("id") ?: continue
-            if (id == ORDER_DOC_ID) continue
-            val updatedAt = row.getLong("updatedAt")
-            if (id.startsWith(TOMBSTONE_PREFIX)) {
-                songs += SongDto(
-                    id = id.removePrefix(TOMBSTONE_PREFIX),
-                    updatedAt = updatedAt,
-                    deleted = true
-                )
-            } else if (!isMetaId(id)) {
-                songs += rowToDto(row, id, updatedAt)
-            }
-        }
-        return SyncSnapshot(
-            v = v,
-            device = deviceId,
-            ts = ts,
-            songs = songs,
-            order = SyncOrder(updatedAt = getOrderUpdatedAt().coerceAtLeast(0), ids = getOrderIds())
-        )
-    }
+    suspend fun buildSnapshot(deviceId: String, v: Long, ts: Long): SyncSnapshot = SyncSnapshot(
+        v = v,
+        device = deviceId,
+        ts = ts,
+        songs = readAllSongs(),
+        order = readOrder()
+    )
 
     /**
      * 应用远端歌曲列表（LWW：`incoming.updatedAt >= 本地` 则生效，相等且分歧时远端胜）。
@@ -339,7 +304,6 @@ class SongRepositoryService {
             .select(
                 SelectResult.expression(kotbase.Meta.id).`as`("id"),
                 SelectResult.property("updatedAt"),
-                SelectResult.property("ts"),
                 SelectResult.property("cid"),
                 SelectResult.property("audioSource"),
                 SelectResult.property("title"),
@@ -372,58 +336,50 @@ class SongRepositoryService {
         pic = row.getString("pic") ?: ""
     )
 
-    private fun rowToSong(row: Result, id: String, orderIds: List<String>): Song = Song(
-        id = id,
-        cid = row.getString("cid") ?: "",
-        audioSource = parseAudioSource(row.getString("audioSource")),
-        title = row.getString("title") ?: "",
-        author = row.getString("author") ?: "",
-        tags = row.getArray("tags")?.toList()?.mapNotNull { it.toString() } ?: emptyList(),
-        lyricSource = parseLyricSource(row.getString("lyricSource")),
-        lyricId = row.getString("lyricId") ?: "",
-        lyricBias = row.getInt("lyricBias"),
-        coverSource = parseCoverSource(row.getString("coverSource")),
-        coverId = row.getString("coverId") ?: "",
-        pic = row.getString("pic") ?: "",
-        ts = orderIndex(orderIds, id)
-    )
-
-    private fun docToSong(doc: Document, orderIds: List<String>): Song = Song(
-        id = doc.id,
-        cid = doc.getString("cid") ?: "",
-        audioSource = parseAudioSource(doc.getString("audioSource")),
-        title = doc.getString("title") ?: "",
-        author = doc.getString("author") ?: "",
-        tags = doc.getArray("tags")?.toList()?.mapNotNull { it.toString() } ?: emptyList(),
-        lyricSource = parseLyricSource(doc.getString("lyricSource")),
-        lyricId = doc.getString("lyricId") ?: "",
-        lyricBias = doc.getInt("lyricBias"),
-        coverSource = parseCoverSource(doc.getString("coverSource")),
-        coverId = doc.getString("coverId") ?: "",
-        pic = doc.getString("pic") ?: "",
-        ts = orderIndex(orderIds, doc.id)
-    )
+    private fun rowToSong(row: Result, id: String, orderIds: List<String>): Song =
+        rowToDto(row, id, row.getLong("updatedAt")).toSong(orderIds)
 
     private fun orderIndex(orderIds: List<String>, id: String): Long {
         val idx = orderIds.indexOf(id)
         return if (idx >= 0) idx.toLong() else orderIds.size.toLong()
     }
 
+    /** 仓库实体 → 同步载荷（来源枚举按名字落库，避免耦合枚举定义）。 */
+    private fun Song.toDto(updatedAt: Long): SongDto = SongDto(
+        id = id,
+        updatedAt = updatedAt,
+        cid = cid,
+        audioSource = audioSource.name,
+        title = title,
+        author = author,
+        tags = tags,
+        lyricSource = lyricSource.name,
+        lyricId = lyricId,
+        lyricBias = lyricBias,
+        coverSource = coverSource.name,
+        coverId = coverId,
+        pic = pic
+    )
+
+    /** 同步载荷 → 仓库实体，[Song.ts] 由顺序位次推导。 */
+    private fun SongDto.toSong(orderIds: List<String>): Song = Song(
+        id = id,
+        cid = cid,
+        audioSource = parseAudioSource(audioSource),
+        title = title,
+        author = author,
+        tags = tags,
+        lyricSource = parseLyricSource(lyricSource),
+        lyricId = lyricId,
+        lyricBias = lyricBias,
+        coverSource = parseCoverSource(coverSource),
+        coverId = coverId,
+        pic = pic,
+        ts = orderIndex(orderIds, id)
+    )
+
     private fun songToDocument(song: Song, updatedAt: Long): MutableDocument =
-        MutableDocument(song.id).apply {
-            setLong("updatedAt", updatedAt)
-            setString("cid", song.cid)
-            setString("audioSource", song.audioSource.name)
-            setString("title", song.title)
-            setString("author", song.author)
-            setArray("tags", MutableArray(song.tags))
-            setString("lyricSource", song.lyricSource.name)
-            setString("lyricId", song.lyricId)
-            setInt("lyricBias", song.lyricBias)
-            setString("coverSource", song.coverSource.name)
-            setString("coverId", song.coverId)
-            setString("pic", song.pic)
-        }
+        song.toDto(updatedAt).toMutableDocument()
 
     private fun SongDto.toMutableDocument(): MutableDocument =
         MutableDocument(id).apply {
