@@ -11,6 +11,7 @@ import com.zuoguan.bilimusickmp.services.NetEaseService
 import com.zuoguan.bilimusickmp.services.PreferencesStorageService
 import com.zuoguan.bilimusickmp.services.SongMetadataService
 import com.zuoguan.bilimusickmp.services.SongRepositoryService
+import com.zuoguan.bilimusickmp.services.UpdateCheckService
 import com.zuoguan.bilimusickmp.services.VlcAudioPlayService
 import com.zuoguan.bilimusickmp.utils.getAppConfigDir
 import com.zuoguan.bilimusickmp.utils.migrateLegacyJvmPreferences
@@ -45,6 +46,7 @@ val appModule = module {
     single<AudioPlayService> { VlcAudioPlayService() }
     single { SongRepositoryService() }
     single { SongMetadataService(get(), get(), get(), get()) }
+    single { UpdateCheckService() }
     single(createdAtStart = true) { CloudSyncService(get(), get(), get()) }
     // 歌曲编辑会话：ViewModel 双平台共用，桌面侧由对话框承载
     single { SongEditorViewModel(get(), get()) }
@@ -55,7 +57,7 @@ val appModule = module {
     }
     single { PlayBarViewModel(get()) }
     single { LyricsPageViewModel(get(), get()) }
-    single { SettingsPageViewModel(get(), get(), get()) }
+    single { SettingsPageViewModel(get(), get(), get(), get()) }
     // 主题色由根组件订阅，与设置页共用同一份偏好
     single { ThemeViewModel(get()) }
 }

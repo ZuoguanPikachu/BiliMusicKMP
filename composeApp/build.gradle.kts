@@ -10,6 +10,37 @@ plugins {
     kotlin("plugin.serialization") version "2.3.0"
 }
 
+/**
+ * 版本号唯一来源：gradle.properties 的 app.version。
+ *
+ * Android 的 versionName、桌面的 packageVersion 与本应用运行时展示/比较用的版本号
+ * 都取自这一处，避免多份硬编码互相漂移。
+ */
+val appVersion: String = providers.gradleProperty("app.version").get()
+
+/** 把版本号生成为 commonMain 的常量，双端读同一个值。 */
+val generateAppVersion by tasks.registering {
+    val version = appVersion
+    val outputDir = layout.buildDirectory.dir("generated/appVersion/kotlin")
+    inputs.property("appVersion", version)
+    outputs.dir(outputDir)
+    doLast {
+        val target = outputDir.get().asFile.resolve("com/zuoguan/bilimusickmp/AppVersion.kt")
+        target.parentFile.mkdirs()
+        target.writeText(
+            """
+            |package com.zuoguan.bilimusickmp
+            |
+            |/** 应用版本号；由 Gradle 依据 gradle.properties 的 app.version 生成，请勿手改。 */
+            |object AppVersion {
+            |    const val NAME: String = "$version"
+            |}
+            |
+            """.trimMargin()
+        )
+    }
+}
+
 kotlin {
     androidTarget {
         compilerOptions {
@@ -54,6 +85,8 @@ kotlin {
             implementation("sh.calvin.reorderable:reorderable:3.1.0")
             implementation("io.github.dokar3:quickjs-kt:1.0.5")
         }
+        // 版本常量由 Gradle 生成后并入 commonMain，Android 与桌面共用同一份
+        getByName("commonMain").kotlin.srcDir(generateAppVersion)
         commonTest.dependencies {
             implementation(libs.kotlin.test)
         }
@@ -77,7 +110,7 @@ android {
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = 1
-        versionName = "1.4.0"
+        versionName = appVersion
     }
     packaging {
         resources {
@@ -106,7 +139,7 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "BiliMusic"
-            packageVersion = "1.4.0"
+            packageVersion = appVersion
             windows {
                 iconFile.set(project.file("src/jvmMain/composeResources/drawable/bili_music.ico"))
             }

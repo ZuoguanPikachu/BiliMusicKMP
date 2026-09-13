@@ -13,6 +13,7 @@ import com.zuoguan.bilimusickmp.services.NetEaseService
 import com.zuoguan.bilimusickmp.services.PreferencesStorageService
 import com.zuoguan.bilimusickmp.services.SongMetadataService
 import com.zuoguan.bilimusickmp.services.SongRepositoryService
+import com.zuoguan.bilimusickmp.services.UpdateCheckService
 import com.zuoguan.bilimusickmp.vm.LyricsPageViewModel
 import com.zuoguan.bilimusickmp.vm.PlayBarViewModel
 import com.zuoguan.bilimusickmp.vm.PlaylistPageViewModel
@@ -41,13 +42,14 @@ val appModule = module {
 
     single { NavigationService() }
     single { SongMetadataService(get(), get(), get(), get()) }
+    single { UpdateCheckService() }
     single(createdAtStart = true) { CloudSyncService(get(), get(), get()) }
     // 歌曲编辑会话：双平台共用同一 ViewModel，Android 侧用整页承载表单
     single { SongEditorViewModel(get(), get()) }
 
     single { PlaylistPageViewModel(get(), get(), get(), get(), get()) }
     single { SearchPageViewModel(get(), get(), get(), get()) }
-    single { SettingsPageViewModel(get(), get(), get()) }
+    single { SettingsPageViewModel(get(), get(), get(), get()) }
     // 主题色由根组件订阅，与设置页共用同一份偏好
     single { ThemeViewModel(get()) }
     single { PlayBarViewModel(get()) }
