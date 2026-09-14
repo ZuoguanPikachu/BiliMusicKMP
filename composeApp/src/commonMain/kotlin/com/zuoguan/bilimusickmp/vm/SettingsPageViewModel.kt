@@ -3,7 +3,9 @@ package com.zuoguan.bilimusickmp.vm
 import com.zuoguan.bilimusickmp.AppVersion
 import com.zuoguan.bilimusickmp.models.LLMConfig
 import com.zuoguan.bilimusickmp.services.CloudSyncService
+import com.zuoguan.bilimusickmp.services.ExtractSongBaseInfoService
 import com.zuoguan.bilimusickmp.services.JsEngineService
+import com.zuoguan.bilimusickmp.services.LlmConnectionResult
 import com.zuoguan.bilimusickmp.services.PreferencesStorageService
 import com.zuoguan.bilimusickmp.services.SyncUiState
 import com.zuoguan.bilimusickmp.services.UpdateCheckResult
@@ -33,7 +35,8 @@ class SettingsPageViewModel(
     private val preferencesStorageService: PreferencesStorageService,
     private val jsEngineService: JsEngineService,
     private val cloudSyncService: CloudSyncService,
-    private val updateCheckService: UpdateCheckService
+    private val updateCheckService: UpdateCheckService,
+    private val extractSongBaseInfoService: ExtractSongBaseInfoService
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -74,10 +77,44 @@ class SettingsPageViewModel(
         }
     }
 
-    /** 保存 LLM 配置到偏好存储。 */
+    /** 保存 LLM 配置到偏好存储；结果用 Snackbar 反馈。 */
     fun saveConfig(config: LLMConfig) {
         scope.launch {
-            preferencesStorageService.saveLLMConfig(config)
+            try {
+                preferencesStorageService.saveLLMConfig(config)
+                _uiEvents.send(UiEvent.ShowSnackBar("LLM 配置已保存"))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiEvents.send(UiEvent.ShowSnackBar("LLM 配置保存失败：${e.message ?: "未知错误"}"))
+            }
+        }
+    }
+
+    /**
+     * 用当前输入测试一次 LLM 连接。
+     *
+     * 测的是界面上的草稿而不是已保存的配置，方便「先测通再保存」；
+     * 测试期间重复点击直接忽略。结果连同被测配置一起记下，
+     * 界面据此判断要不要展示——输入改过之后旧结果就不再显示。
+     */
+    fun testLlmConnection(config: LLMConfig) {
+        if (_uiState.value.llmTest.isTesting) return
+
+        _uiState.update {
+            it.copy(llmTest = LlmTestState(isTesting = true, testedConfig = config))
+        }
+        scope.launch {
+            val result = extractSongBaseInfoService.testConnection(config)
+            _uiState.update {
+                it.copy(
+                    llmTest = LlmTestState(
+                        isTesting = false,
+                        testedConfig = config,
+                        result = result
+                    )
+                )
+            }
         }
     }
 
@@ -131,11 +168,25 @@ class SettingsPageViewModel(
 
 data class SettingsUiState(
     val llmConfig: LLMConfig = LLMConfig(),
+    val llmTest: LlmTestState = LlmTestState(),
     val script: String = "",
     /** 脚本最近一次求值失败的原因；null 表示当前脚本可用。 */
     val scriptError: String? = null,
     val syncStatus: SyncUiState = SyncUiState(),
     val updateCheck: UpdateCheckState = UpdateCheckState()
+)
+
+/**
+ * 「测试连接」状态。
+ *
+ * @property isTesting 是否正在请求中，用于禁用按钮与展示进度。
+ * @property testedConfig 这次结果对应的配置；与当前输入不一致时界面不展示旧结果。
+ * @property result 最近一次测试结果；null 表示还没测过。
+ */
+data class LlmTestState(
+    val isTesting: Boolean = false,
+    val testedConfig: LLMConfig? = null,
+    val result: LlmConnectionResult? = null
 )
 
 /**

@@ -49,7 +49,7 @@ val appModule = module {
 
     single { PlaylistPageViewModel(get(), get(), get(), get(), get()) }
     single { SearchPageViewModel(get(), get(), get(), get()) }
-    single { SettingsPageViewModel(get(), get(), get(), get()) }
+    single { SettingsPageViewModel(get(), get(), get(), get(), get()) }
     // 主题色由根组件订阅，与设置页共用同一份偏好
     single { ThemeViewModel(get()) }
     single { PlayBarViewModel(get()) }

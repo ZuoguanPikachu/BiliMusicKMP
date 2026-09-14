@@ -39,10 +39,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -66,7 +64,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.zuoguan.bilimusickmp.LocalSnackBarHostState
 import com.zuoguan.bilimusickmp.models.DarkMode
-import com.zuoguan.bilimusickmp.models.LLMConfig
 import com.zuoguan.bilimusickmp.models.ProjectInfo
 import com.zuoguan.bilimusickmp.services.ReleaseInfo
 import com.zuoguan.bilimusickmp.services.UpdateCheckResult
@@ -97,16 +94,8 @@ fun SettingsPage(
     val state by viewModel.uiState.collectAsState()
     val themeState by themeViewModel.uiState.collectAsState()
 
-    var apiKey by remember { mutableStateOf(state.llmConfig.apiKey) }
-    var baseUrl by remember { mutableStateOf(state.llmConfig.baseUrl) }
-    var modelName by remember { mutableStateOf(state.llmConfig.modelName) }
     var script by remember { mutableStateOf(state.script) }
 
-    LaunchedEffect(state.llmConfig) {
-        apiKey = state.llmConfig.apiKey
-        baseUrl = state.llmConfig.baseUrl
-        modelName = state.llmConfig.modelName
-    }
     LaunchedEffect(state.script) {
         script = state.script
     }
@@ -158,71 +147,12 @@ fun SettingsPage(
         }
 
         SettingsSection(title = "LLM 配置") {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    OutlinedTextField(
-                        apiKey,
-                        onValueChange = { apiKey = it },
-                        label = { Text("API Key") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        trailingIcon = {
-                            IconButton(
-                                modifier = Modifier.pointerHoverIcon(PointerIcon.Default),
-                                onClick = {
-                                    apiKey = ""
-                                }
-                            ) {
-                                Icon(Icons.Default.Clear, contentDescription = null)
-                            }
-                        }
-                    )
-                    Spacer(Modifier.height(8.dp))
-
-                    OutlinedTextField(
-                        baseUrl,
-                        onValueChange = { baseUrl = it },
-                        label = { Text("Base URL") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        trailingIcon = {
-                            IconButton(
-                                modifier = Modifier.pointerHoverIcon(PointerIcon.Default),
-                                onClick = {
-                                    baseUrl = ""
-                                }
-                            ) {
-                                Icon(Icons.Default.Clear, contentDescription = null)
-                            }
-                        }
-                    )
-                    Spacer(Modifier.height(8.dp))
-
-                    OutlinedTextField(
-                        modelName,
-                        onValueChange = { modelName = it },
-                        label = { Text("Model Name") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        trailingIcon = {
-                            IconButton(
-                                modifier = Modifier.pointerHoverIcon(PointerIcon.Default),
-                                onClick = {
-                                    modelName = ""
-                                }
-                            ) {
-                                Icon(Icons.Default.Clear, contentDescription = null)
-                            }
-                        }
-                    )
-                    Spacer(Modifier.height(16.dp))
-
-                    Button(
-                        onClick = { viewModel.saveConfig(LLMConfig(apiKey, baseUrl, modelName)) },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("保存")
-                    }
-                }
+            LlmConfigSection(
+                savedConfig = state.llmConfig,
+                testState = state.llmTest,
+                onSave = { viewModel.saveConfig(it) },
+                onTest = { viewModel.testLlmConnection(it) }
+            )
         }
 
         SettingsSection(title = "云同步脚本") {
