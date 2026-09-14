@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -24,6 +23,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
@@ -31,7 +31,6 @@ import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.NewReleases
-import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
@@ -41,7 +40,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -64,7 +62,6 @@ import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.zuoguan.bilimusickmp.LocalSnackBarHostState
@@ -83,12 +80,12 @@ import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
 /**
- * 设置页：选择主题与外观，编辑 LLM 配置与云同步脚本，并在「关于」区块查看版本、
+ * 设置页：选择主题与外观，编辑 LLM 配置，配置云同步脚本，并在「关于」区块查看版本、
  * 项目链接与手动检查新版本。
  *
  * 主题区的改动（明暗模式、主题色）点击即预览：全局立即变化但不落盘，确认后才保存并同步；
- * 输入框用本地状态保存未保存的编辑内容，只有点保存才写回存储，已保存的配置发生变化时
- * 再回填到输入框。
+ * LLM 配置与云同步脚本都用本地草稿保存未保存的编辑内容，只有点保存才写回存储，
+ * 已保存的内容发生变化时再回填草稿。
  */
 @Composable
 fun SettingsPage(
@@ -113,6 +110,9 @@ fun SettingsPage(
     LaunchedEffect(state.script) {
         script = state.script
     }
+
+    // 脚本保存结果等一次性事件走 Snackbar；宿主由 App 根组件提供
+    SnackbarEvents(viewModel.uiEvents)
 
     Column(
         modifier = modifier
@@ -225,35 +225,16 @@ fun SettingsPage(
                 }
         }
 
-        SettingsSection(title = "云同步Script") {
-            Column(modifier = Modifier.padding(16.dp)) {
-                OutlinedTextField(
-                    value = script,
-                    onValueChange = { script = it },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 160.dp),
-                    textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace),
-                    maxLines = 8,
-                )
-
-                Spacer(Modifier.height(16.dp))
-
-                Button(
-                    onClick = { viewModel.saveScript(script) },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("保存")
-                }
-
-                Spacer(Modifier.height(16.dp))
-
-                Text(
-                    text = "同步状态：${state.syncStatus.label}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+        SettingsSection(title = "云同步脚本") {
+            CloudSyncScriptSection(
+                script = script,
+                savedScript = state.script,
+                status = state.syncStatus,
+                scriptError = state.scriptError,
+                onScriptChange = { script = it },
+                onSave = { viewModel.saveScript(script) },
+                onSyncNow = { viewModel.syncNow() }
+            )
         }
 
         SettingsSection(title = "关于") {
@@ -456,7 +437,7 @@ private fun AboutLinkRow(
         Spacer(Modifier.width(8.dp))
 
         Icon(
-            imageVector = Icons.Default.OpenInNew,
+            imageVector = Icons.AutoMirrored.Filled.OpenInNew,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(16.dp)

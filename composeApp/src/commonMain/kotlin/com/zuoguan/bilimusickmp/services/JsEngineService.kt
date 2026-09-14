@@ -3,6 +3,7 @@ package com.zuoguan.bilimusickmp.services
 import com.dokar.quickjs.QuickJs
 import com.dokar.quickjs.binding.JsObject
 import com.dokar.quickjs.binding.define
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -45,6 +46,19 @@ class JsEngineService(
 
     /** 当前脚本内容流，供设置页展示。 */
     fun getScript(): Flow<String> = _scriptFlow.asStateFlow()
+
+    /**
+     * 当前脚本内容（同步读取）。
+     *
+     * 供设置页 VM 初始化草稿用：否则在 [getScript] 首次发射前，界面会短暂出现
+     * 「草稿为空」的中间态，看起来像是整段脚本被删掉了。
+     */
+    fun currentScript(): String = _scriptFlow.value
+
+    private val _scriptErrorFlow = MutableStateFlow<String?>(null)
+
+    /** 脚本最近一次求值失败的原因；null 表示当前脚本能被正常求值。 */
+    fun getScriptError(): Flow<String?> = _scriptErrorFlow.asStateFlow()
 
     init {
         defineFunctions()
@@ -171,11 +185,26 @@ class JsEngineService(
         }
     }
 
-    /** 载入脚本内容并异步求值，同时更新 [getScript] 流。 */
+    /**
+     * 载入脚本内容并异步求值，同时更新 [getScript] 流。
+     *
+     * 求值失败（语法错误、运行时异常）只记录到 [getScriptError]，不向上抛：
+     * 这里没有异常处理器，抛出去会直接终止协程并让应用崩溃。
+     */
     fun loadScript(script: String) {
         _scriptFlow.value = script
         scope.launch {
-            engine.evaluate<Any?>(script)
+            try {
+                engine.evaluate<Any?>(script)
+                _scriptErrorFlow.value = null
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // 引擎的报错常带调用栈，只取首行给界面
+                val firstLine = e.message?.lineSequence()?.firstOrNull()?.trim().orEmpty()
+                _scriptErrorFlow.value =
+                    firstLine.ifBlank { "脚本执行失败：${e::class.simpleName ?: "未知错误"}" }
+            }
         }
         isScriptLoaded = true
     }

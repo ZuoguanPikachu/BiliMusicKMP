@@ -55,3 +55,6 @@ internal actual fun writeTextFileAtomic(path: String, content: String) {
 }
 
 internal actual fun currentTimeMillis(): Long = System.currentTimeMillis()
+
+/** Android 视为移动端界面。 */
+internal actual val isMobileUi: Boolean = true

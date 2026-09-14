@@ -54,3 +54,6 @@ internal actual fun writeTextFileAtomic(path: String, content: String) {
 
 /** 当前时间戳，毫秒。 */
 internal actual fun currentTimeMillis(): Long = System.currentTimeMillis()
+
+/** 桌面端不是移动端界面。 */
+internal actual val isMobileUi: Boolean = false

@@ -10,11 +10,15 @@ import com.zuoguan.bilimusickmp.services.UpdateCheckResult
 import com.zuoguan.bilimusickmp.services.UpdateCheckService
 import com.zuoguan.bilimusickmp.services.getLLMConfig
 import com.zuoguan.bilimusickmp.services.saveLLMConfig
+import com.zuoguan.bilimusickmp.utils.UiEvent
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -33,8 +37,15 @@ class SettingsPageViewModel(
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    private val _uiState = MutableStateFlow(SettingsUiState())
+    private val _uiState = MutableStateFlow(
+        // 草稿直接用引擎里已有的脚本初始化，避免界面先闪一帧「脚本是空的」
+        SettingsUiState(script = jsEngineService.currentScript())
+    )
     val uiState: StateFlow<SettingsUiState> = _uiState
+
+    private val _uiEvents = Channel<UiEvent>(Channel.BUFFERED)
+    /** 一次性 UI 事件（脚本保存结果等）。 */
+    val uiEvents = _uiEvents.receiveAsFlow()
 
     init {
         observeStorage()
@@ -52,6 +63,11 @@ class SettingsPageViewModel(
             }
         }
         scope.launch {
+            jsEngineService.getScriptError().collect { error ->
+                _uiState.update { it.copy(scriptError = error) }
+            }
+        }
+        scope.launch {
             cloudSyncService.status.collect { status ->
                 _uiState.update { it.copy(syncStatus = status) }
             }
@@ -65,10 +81,29 @@ class SettingsPageViewModel(
         }
     }
 
-    /** 保存云同步脚本到脚本引擎存储。 */
+    /**
+     * 保存云同步脚本到脚本引擎存储。
+     *
+     * 保存会重建 JS 引擎并触发一次同步，结果用 Snackbar 反馈；
+     * 脚本本身的语法错误由 [SettingsUiState.scriptError] 持续展示。
+     */
     fun saveScript(script: String) {
         scope.launch {
-            jsEngineService.saveScript(script)
+            try {
+                jsEngineService.saveScript(script)
+                _uiEvents.send(UiEvent.ShowSnackBar("脚本已保存，正在同步…"))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiEvents.send(UiEvent.ShowSnackBar("脚本保存失败：${e.message ?: "未知错误"}"))
+            }
+        }
+    }
+
+    /** 立即同步一次，不等防抖计时。 */
+    fun syncNow() {
+        scope.launch {
+            cloudSyncService.syncNow()
         }
     }
 
@@ -97,6 +132,8 @@ class SettingsPageViewModel(
 data class SettingsUiState(
     val llmConfig: LLMConfig = LLMConfig(),
     val script: String = "",
+    /** 脚本最近一次求值失败的原因；null 表示当前脚本可用。 */
+    val scriptError: String? = null,
     val syncStatus: SyncUiState = SyncUiState(),
     val updateCheck: UpdateCheckState = UpdateCheckState()
 )
