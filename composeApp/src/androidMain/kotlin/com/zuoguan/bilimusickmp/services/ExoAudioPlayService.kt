@@ -220,9 +220,14 @@ class ExoAudioPlayService(
     @OptIn(UnstableApi::class)
     override suspend fun play(track: TrackInfo) {
         val currentSource = buildMediaSource(track)
-        // 预取下一首只是优化：失败不能影响当前歌曲起播
+        // 预取下一首只是优化：失败不能影响当前歌曲起播。
+        // 基准必须是"即将播放的 track"：此刻 _currentTrack 还停在上一首，若用默认参数，
+        // 算出来的会是上一首的下一首（通常正是 track 本身），播放器时间线里就只剩一首——
+        // 系统侧没有"下一曲"可用，播完也不会自动续播。
+        // 注意不要在这里加 `takeIf { it.id != track.id }` 之类的过滤：单曲循环与单曲歌单的
+        // "下一首"本来就是自己，那个窗口正是循环播放所依赖的第二条时间线条目。
         val nextSource = if (track.playSource == PlaySource.PLAYLIST) {
-            getNextTrack()?.takeIf { it.id != track.id }?.let { next ->
+            getNextTrack(track)?.let { next ->
                 try {
                     buildMediaSource(next)
                 } catch (e: Exception) {
@@ -257,7 +262,7 @@ class ExoAudioPlayService(
             _currentTrack.value = playlist.firstOrNull { it.id == itemId } ?: next
             scope.launch {
                 try {
-                    val following = getFollowingTrack(next) ?: return@launch
+                    val following = getNextTrack(next) ?: return@launch
                     val nextMediaSource = buildMediaSource(following)
                     withContext(Dispatchers.Main.immediate) {
                         player.addMediaSource(nextMediaSource)
@@ -321,10 +326,13 @@ class ExoAudioPlayService(
     /**
      * 按当前播放模式求下一首。
      *
-     * @return 无当前曲目或歌单为空时返回 null，调用方必须判空。
+     * @param from 基准曲目，缺省为当前正在播放的曲目。自动续播时的语义就是"当前曲的下一首"，
+     *   所以这里默认取 `_currentTrack`；而 [play] 预取下一首时必须显式传入将要播放的曲目，
+     *   因为那一刻 `_currentTrack` 还没更新。
+     * @return 基准曲目或歌单为空时返回 null，调用方必须判空。
      */
-    private fun getNextTrack(): TrackInfo? {
-        val current = _currentTrack.value ?: return null
+    private fun getNextTrack(from: TrackInfo? = _currentTrack.value): TrackInfo? {
+        val current = from ?: return null
         val list = _playlist.value
         if (list.isEmpty()) return null
 
@@ -340,20 +348,6 @@ class ExoAudioPlayService(
                 val index = list.indexOfFirst { it.id == current.id }
                 if (index == -1) list.first()
                 else list[(index + 1) % list.size]
-            }
-        }
-    }
-
-    /** 某首歌的下一首（用于预取），语义与 [getNextTrack] 一致但以指定曲目为基准。 */
-    private fun getFollowingTrack(track: TrackInfo): TrackInfo? {
-        val list = _playlist.value
-        if (list.isEmpty()) return null
-        return when (_playMode.value) {
-            PlayMode.SINGLE_LOOP -> track
-            PlayMode.SHUFFLE -> list.filter { it.id != track.id }.randomOrNull() ?: track
-            PlayMode.SEQUENTIAL -> {
-                val index = list.indexOfFirst { it.id == track.id }
-                if (index == -1) list.first() else list[(index + 1) % list.size]
             }
         }
     }
