@@ -80,6 +80,7 @@ class SearchPageViewModel(
         _uiState.value = state.copy(
             isSearchLoading = true,
             isLoadingMore = false,
+            loadMoreError = null,
             searchError = null,
             results = emptyList(),
             page = 1,
@@ -96,6 +97,9 @@ class SearchPageViewModel(
      *
      * 界面上的触底回调可能连续触发，这里用 [SearchUiState.isLoadingMore] 与
      * [SearchUiState.endReached] 去重，重复调用会直接返回。
+     *
+     * 上一次加载失败（[SearchUiState.loadMoreError]）后界面的触底回调是被关掉的，
+     * 只有用户点底部的"重试"才会再次走到这里，因此不会自动反复重试。
      */
     fun loadMore() {
         val state = _uiState.value
@@ -108,7 +112,7 @@ class SearchPageViewModel(
             return
         }
 
-        _uiState.update { it.copy(isLoadingMore = true) }
+        _uiState.update { it.copy(isLoadingMore = true, loadMoreError = null) }
 
         searchJob = scope.launch {
             loadPage(keyword, state.audioSource, page = state.page + 1, append = true)
@@ -127,21 +131,21 @@ class SearchPageViewModel(
         append: Boolean
     ) {
         try {
-            val result = when (audioSource) {
+            val pageResult = when (audioSource) {
                 AudioSource.BILI_BILI ->
                     biliService.search(keyword, page)
-                        .map { it.copy(audioSource = AudioSource.BILI_BILI) }
 
                 AudioSource.NET_EASE ->
                     netEaseService.search(
                         s = keyword,
                         offset = (page - 1) * PAGE_SIZE,
                         limit = PAGE_SIZE
-                    ).map { it.copy(audioSource = AudioSource.NET_EASE) }
+                    )
 
                 AudioSource.KU_GOU ->
                     kuGouService.search(keyword, pageSize = PAGE_SIZE, page = page)
             }
+            val result = pageResult.items
 
             _uiState.update { current ->
                 val results = if (append) {
@@ -154,22 +158,28 @@ class SearchPageViewModel(
                 current.copy(
                     isSearchLoading = false,
                     isLoadingMore = false,
+                    loadMoreError = null,
                     results = results,
                     page = page,
-                    // 空页说明没有下一页；追加时一条新结果都没多出来（例如接口忽略了 page 参数）
-                    // 也算到底，否则触底回调会一直重复请求同一页
-                    endReached = result.isEmpty() || results.size == current.results.size
+                    // 到底的判定：接口自己说了没有下一页最准；再兜两层——
+                    // 空页说明没有下一页，追加时一条新结果都没多出来（例如接口忽略了 page
+                    // 参数）也算到底。少了这几条判断，触底回调会一直重复请求同一页。
+                    endReached = !pageResult.hasMore ||
+                            result.isEmpty() ||
+                            results.size == current.results.size
                 )
             }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             if (append) {
-                // 加载下一页失败不动已有结果，只提示一次
-                _uiState.update { it.copy(isLoadingMore = false) }
-                _uiEvents.send(
-                    UiEvent.ShowSnackBar(message = (e.message ?: "加载失败") + "，请重试")
-                )
+                // 加载下一页失败：已有结果原样保留，只记下错误。
+                // 这里不能只把 isLoadingMore 置回 false —— 列表还停在底部时触底回调会立刻
+                // 再发一次请求，失败后又发，形成停不下来的重试（搜索结果少、很快就翻到
+                // 最后一页时尤其明显）。改为关掉触底加载，等用户点底部"重试"。
+                _uiState.update {
+                    it.copy(isLoadingMore = false, loadMoreError = e.message ?: "加载失败")
+                }
             } else {
                 _uiState.update {
                     it.copy(
@@ -254,5 +264,10 @@ data class SearchUiState(
     val page: Int = 1,
     /** 已经到最后一页，触底不再请求。 */
     val endReached: Boolean = false,
+    /**
+     * 加载下一页失败的提示。非空时触底加载暂停（避免自动反复重试），
+     * 由列表底部的"重试"清掉并继续加载。
+     */
+    val loadMoreError: String? = null,
     val searchError: String? = null
 )

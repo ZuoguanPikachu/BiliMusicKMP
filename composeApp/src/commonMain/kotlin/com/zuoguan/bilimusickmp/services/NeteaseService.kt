@@ -10,6 +10,7 @@ import com.google.gson.Gson
 import com.zuoguan.bilimusickmp.models.AudioSource
 import com.zuoguan.bilimusickmp.models.LyricLine
 import com.zuoguan.bilimusickmp.models.SearchResult
+import com.zuoguan.bilimusickmp.models.SearchResultPage
 import com.zuoguan.bilimusickmp.utils.NoRetryException
 import com.zuoguan.bilimusickmp.utils.retry
 import kotlinx.coroutines.Dispatchers
@@ -146,6 +147,7 @@ class NetEaseService {
      *
      * @param searchType 网易云的搜索类型，1 表示单曲。
      * @param offset 结果偏移，配合 [limit] 分页。
+     * @return 本页结果与"还有没有下一页"；单曲链接/id 这种不分页的输入 [SearchResultPage.hasMore] 恒为 false。
      * @throws NoRetryException 分享链接或歌曲链接里解析不出 id 时，[retry] 不会重试。
      */
     suspend fun search(
@@ -153,21 +155,21 @@ class NetEaseService {
         searchType: Int = 1,
         offset: Int = 0,
         limit: Int = 10
-    ): List<SearchResult> {
+    ): SearchResultPage {
         if (s.contains("163cn.tv")) {
             val songId = resolveShareLinkId(s)
                 ?: throw NoRetryException("无法从分享链接解析歌曲 ID")
-            return searchById(songId)
+            return SearchResultPage(searchById(songId), hasMore = false)
         }
 
         if (s.contains("song?id=")) {
             val songId = extractSongId(s)
                 ?: throw NoRetryException("无法从链接解析歌曲 ID")
-            return searchById(songId)
+            return SearchResultPage(searchById(songId), hasMore = false)
         }
 
         if (s.matches(Regex("^\\d+$"))) {
-            return searchById(s)
+            return SearchResultPage(searchById(s), hasMore = false)
         }
 
         return retry(times = 5) {
@@ -201,6 +203,11 @@ class NetEaseService {
                 val imageUrl = (song["al"] as? Map<*, *>)?.get("picUrl")?.toString().orEmpty()
 
                 SearchResult(id, title, author, imageUrl, duration, AudioSource.NET_EASE)
+            }.let { items ->
+                // songCount 是命中总数，用它判断还有没有下一页；拿不到就退回"本页是否满页"
+                val total = (result["songCount"] as? Number)?.toInt()
+                val hasMore = total?.let { offset + songs.size < it } ?: (songs.size >= limit)
+                SearchResultPage(items, hasMore)
             }
         }
     }

@@ -3,6 +3,7 @@ package com.zuoguan.bilimusickmp.services
 import com.zuoguan.bilimusickmp.models.AudioSource
 import com.zuoguan.bilimusickmp.models.LyricLine
 import com.zuoguan.bilimusickmp.models.SearchResult
+import com.zuoguan.bilimusickmp.models.SearchResultPage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -65,9 +66,10 @@ class KuGouService {
      *
      * @param pageSize 每页条数，直接透传给接口的 pagesize。
      * @param page 页码，从 1 开始。
-     * @return 解析不出 hash 的条目会被丢弃；接口无结果时返回空列表而不是抛异常。
+     * @return 解析不出 hash 的条目会被丢弃；接口无结果时返回空页而不是抛异常，
+     *   并按接口给的 total 判断还有没有下一页。
      */
-    suspend fun search(keyword: String, pageSize: Int = 10, page: Int = 1): List<SearchResult> {
+    suspend fun search(keyword: String, pageSize: Int = 10, page: Int = 1): SearchResultPage {
         val url = HttpUrl.Builder()
             .scheme("http")
             .host("mobilecdn.kugou.com")
@@ -85,14 +87,14 @@ class KuGouService {
             .addQueryParameter("version", "8990")
             .build()
 
-        // 接口在无结果/被限流时不会返回 data.info，这里统一兜底为空列表
-        val songs = getJson(url)
-            .get("data")?.jsonObject
-            ?.get("info")?.jsonArray
-            ?: return emptyList()
+        // 接口在无结果/被限流时不会返回 data.info，这里统一兜底为空页
+        val data = getJson(url).get("data")?.jsonObject
+            ?: return SearchResultPage(emptyList(), hasMore = false)
+        val songs = data.get("info")?.jsonArray
+            ?: return SearchResultPage(emptyList(), hasMore = false)
 
         // 封面需要逐首再查一次接口，串行会明显拖慢搜索，这里并发获取
-        return coroutineScope {
+        val items = coroutineScope {
             songs.map { item ->
                 async {
                     val song = item.jsonObject
@@ -120,6 +122,12 @@ class KuGouService {
                 }
             }.awaitAll().filterNotNull()
         }
+
+        // total 是命中总数（可能是字符串），用它判断还有没有下一页；拿不到就退回"本页是否满页"
+        val total = data["total"]?.jsonPrimitive?.contentOrNull?.toIntOrNull()
+        val hasMore = total?.let { page * pageSize < it } ?: (songs.size >= pageSize)
+
+        return SearchResultPage(items, hasMore)
     }
 
     /**

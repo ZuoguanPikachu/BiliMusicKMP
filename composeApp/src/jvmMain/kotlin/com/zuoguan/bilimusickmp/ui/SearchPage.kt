@@ -136,18 +136,23 @@ fun SearchPage(
                     }
 
                     // 底部状态跨满整行，否则只会占一个卡片的宽度
-                    if (state.results.isNotEmpty() && (state.isLoadingMore || state.endReached)) {
+                    if (state.results.isNotEmpty() &&
+                        (state.isLoadingMore || state.endReached || state.loadMoreError != null)
+                    ) {
                         item(key = "loadMore", span = { GridItemSpan(maxLineSpan) }) {
                             SearchLoadMoreFooter(
                                 isLoadingMore = state.isLoadingMore,
-                                endReached = state.endReached
+                                endReached = state.endReached,
+                                loadMoreError = state.loadMoreError,
+                                onRetry = viewModel::loadMore
                             )
                         }
                     }
                 }
 
                 viewModel.lazyGridState.LoadMoreOnReachBottom(
-                    enabled = !state.isLoadingMore && !state.endReached,
+                    // 失败后不再自动触发，等用户点底部"重试"
+                    enabled = !state.isLoadingMore && !state.endReached && state.loadMoreError == null,
                     onLoadMore = viewModel::loadMore
                 )
             }

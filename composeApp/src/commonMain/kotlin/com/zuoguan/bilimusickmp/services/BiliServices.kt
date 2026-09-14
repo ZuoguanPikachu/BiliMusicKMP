@@ -2,12 +2,14 @@ package com.zuoguan.bilimusickmp.services
 
 import com.zuoguan.bilimusickmp.models.AudioSource
 import com.zuoguan.bilimusickmp.models.SearchResult
+import com.zuoguan.bilimusickmp.models.SearchResultPage
 import com.zuoguan.bilimusickmp.utils.SimpleCookieJar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.*
+import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 import org.jsoup.Jsoup
@@ -138,11 +140,12 @@ class BiliService {
      * 搜索接口只认关键词，直接拿链接当关键词搜不到东西，所以这里先把链接归一成 BV 号：
      * b23.tv 短链需要跟随重定向拿到真实 URL，完整视频链接则可以直接提取 BV 号。
      *
-     * @param page 页码，从 1 开始；超出最后一页时接口返回空结果。
-     * @return 只保留 type 为 video 的结果；标题已去掉接口返回的 HTML 高亮标签。
-     * @throws Exception 接口请求失败或返回的 JSON 结构不符合预期时。
+     * @param page 页码，从 1 开始。
+     * @return 只保留 type 为 video 的结果（标题已去掉接口返回的 HTML 高亮标签），
+     *   并带上"还有没有下一页"。
+     * @throws Exception 接口请求失败、返回错误码或 JSON 结构不符合预期时。
      */
-    suspend fun search(keyword: String, page: Int = 1): List<SearchResult> {
+    suspend fun search(keyword: String, page: Int = 1): SearchResultPage {
         try {
             ensureWbiReady()
 
@@ -174,9 +177,20 @@ class BiliService {
                     params.entries.joinToString("&") { "${it.key}=${it.value}" }
 
             val json = JSONObject(get(url))
-            val arr = json.getJSONObject("data").getJSONArray("result")
 
-            return (0 until arr.length())
+            // 命中风控/限流时 data 为 null，这里用接口自己的 message 报错，
+            // 否则会被下面解析 data 的异常说成"JSON 解析失败"，看不出真实原因
+            val code = json.optInt("code", 0)
+            if (code != 0) {
+                throw Exception("接口错误 $code：${json.optString("message").ifBlank { "未知原因" }}")
+            }
+
+            val data = json.optJSONObject("data")
+                ?: return SearchResultPage(emptyList(), hasMore = false)
+            // 翻过最后一页时接口不再返回 result 字段，按空列表处理：这是分页结束，不是错误
+            val arr = data.optJSONArray("result") ?: JSONArray()
+
+            val items = (0 until arr.length())
                 .mapNotNull { i ->
                     val o = arr.getJSONObject(i)
 
@@ -195,6 +209,13 @@ class BiliService {
                         audioSource = AudioSource.BILI_BILI
                     )
                 }
+
+            // 有总页数就以它为准：本页混着番剧/直播等被过滤掉的条目，
+            // 用"结果不足一页"判断会误判成最后一页，把后面的结果丢掉
+            val numPages = data.optInt("numPages", 0)
+            val hasMore = if (numPages > 0) page < numPages else items.isNotEmpty()
+
+            return SearchResultPage(items, hasMore)
         }catch (e: JSONException) {
             throw Exception("JSON 解析失败（搜索接口）", e)
         } catch (e: Exception) {
