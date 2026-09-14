@@ -102,6 +102,9 @@ class SongRepositoryService {
     suspend fun saveSong(song: Song) {
         val existed = coll.getDocument(song.id) != null
         coll.save(songToDocument(song, nextClock()))
+        // 删除后重新添加同一首歌：清掉旧墓碑，否则同 id 的「墓碑 + 歌曲」会一起被
+        // 同步出去，且墓碑会随每次快照反复外发（其版本必然低于 nextClock()，删除是安全的）。
+        coll.getDocument(tombstoneId(song.id))?.let { coll.delete(it) }
         if (!existed) {
             appendToOrder(song.id)
         }
@@ -182,13 +185,19 @@ class SongRepositoryService {
         val songs = mutableListOf<SongDto>()
         for (row in queryAllRows()) {
             val id = row.getString("id") ?: continue
-            if (isMetaId(id)) continue
             val updatedAt = row.getLong("updatedAt")
-            songs += if (id.startsWith(TOMBSTONE_PREFIX)) {
-                SongDto(id = id.removePrefix(TOMBSTONE_PREFIX), updatedAt = updatedAt, deleted = true)
-            } else {
-                rowToDto(row, id, updatedAt)
+            // 墓碑必须先于 isMetaId 判断：墓碑 id 以 "~del:" 开头，同样满足 "~" 前缀，
+            // 若先被当作元文档跳过，删除标记就永远推不出去，其他设备上的歌曲会被复活。
+            if (id.startsWith(TOMBSTONE_PREFIX)) {
+                songs += SongDto(
+                    id = id.removePrefix(TOMBSTONE_PREFIX),
+                    updatedAt = updatedAt,
+                    deleted = true
+                )
+                continue
             }
+            if (isMetaId(id)) continue
+            songs += rowToDto(row, id, updatedAt)
         }
         return songs
     }
