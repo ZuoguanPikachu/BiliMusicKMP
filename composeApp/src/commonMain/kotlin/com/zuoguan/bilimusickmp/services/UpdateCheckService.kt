@@ -1,6 +1,7 @@
 package com.zuoguan.bilimusickmp.services
 
 import com.zuoguan.bilimusickmp.AppVersion
+import com.zuoguan.bilimusickmp.models.ProjectInfo
 import com.zuoguan.bilimusickmp.utils.isNewerVersion
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -47,11 +48,8 @@ sealed interface UpdateCheckResult {
  */
 class UpdateCheckService {
     companion object {
-        /** 仓库坐标，与项目远程仓库一致。 */
-        const val REPO_SLUG = "ZuoguanPikachu/BiliMusicKMP"
-
         private const val LATEST_RELEASE_URL =
-            "https://api.github.com/repos/$REPO_SLUG/releases/latest"
+            "https://api.github.com/repos/${ProjectInfo.REPO_SLUG}/releases/latest"
 
         /** 更新说明过长会把设置页撑得很长，只保留开头这么多字符。 */
         private const val NOTES_MAX_LENGTH = 500
