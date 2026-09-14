@@ -64,7 +64,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -207,7 +206,7 @@ fun CloudSyncScriptSection(
     }
 }
 
-/** 状态头部：云同步图标、脚本名、状态指示与「立即同步」。 */
+/** 状态头部：云同步图标、状态指示与「立即同步」；区块标题由外层的分区标题提供，这里不再重复。 */
 @Composable
 private fun SyncHeader(
     status: SyncUiState,
@@ -237,41 +236,34 @@ private fun SyncHeader(
 
         Spacer(Modifier.width(12.dp))
 
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = "云同步脚本",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-
-            Spacer(Modifier.height(4.dp))
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (status.phase == SyncPhase.SYNCING) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(12.dp),
-                        color = phaseColor,
-                        strokeWidth = 1.5.dp
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(phaseColor)
-                    )
-                }
-
-                Spacer(Modifier.width(6.dp))
-
-                Text(
-                    text = status.label,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+        Row(
+            modifier = Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (status.phase == SyncPhase.SYNCING) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(12.dp),
+                    color = phaseColor,
+                    strokeWidth = 1.5.dp
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(phaseColor)
                 )
             }
+
+            Spacer(Modifier.width(8.dp))
+
+            Text(
+                text = status.label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
         }
 
         Spacer(Modifier.width(12.dp))
@@ -669,7 +661,12 @@ private fun HelpToggleRow(
     }
 }
 
-/** 脚本 API 说明：必须实现的函数 + 引擎注入的宿主函数。 */
+/**
+ * 脚本说明：必须实现的函数、容易被忽略的约定、引擎注入的宿主函数。
+ *
+ * 约定那几条都来自应用实际怎么调用脚本（见 JsEngineService / CloudSyncService），
+ * 尤其是「key 是路径不是文件名」——自建简易服务器的用户最容易在这里踩坑。
+ */
 @Composable
 private fun ScriptApiHelp(modifier: Modifier = Modifier) {
     Column(
@@ -677,28 +674,54 @@ private fun ScriptApiHelp(modifier: Modifier = Modifier) {
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .heightIn(max = 240.dp)
+            .heightIn(max = 280.dp)
             .verticalScroll(rememberScrollState())
             .padding(12.dp)
     ) {
-        Text(
-            text = "必须实现",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary
-        )
-        Spacer(Modifier.height(6.dp))
+        HelpSectionTitle("必须实现")
 
-        HelpEntry("upload(key, bytes)", "上传数据，返回 { status, body, headers }")
-        HelpEntry("download(key)", "下载数据，返回 { status, body, headers }")
+        HelpEntry(
+            name = "upload(key, bytes)",
+            description = "上传；可直接 return http.put(...) 的结果"
+        )
+        HelpEntry(
+            name = "download(key)",
+            description = "下载；云端没有这个对象时返回 status 404"
+        )
+        HelpEntry(
+            name = "两者都要返回",
+            description = "{ status: 数字, body: 字节, headers: 对象 }；" +
+                "返回 undefined 会让同步直接报错"
+        )
 
         Spacer(Modifier.height(12.dp))
 
-        Text(
-            text = "可用宿主函数",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary
+        HelpSectionTitle("约定")
+
+        HelpEntry(
+            name = "key 是路径，不是文件名",
+            description = "应用用的是 sync/v2/head.json 这类带目录的 key。" +
+                "自建服务器请把 key 当不透明字符串按原样保存；只认 ?filename=xxx 或会丢掉目录的实现，" +
+                "轻则上传失败，重则不同对象互相覆盖。"
         )
-        Spacer(Modifier.height(6.dp))
+        HelpEntry(
+            name = "同一个 key 会被反复覆盖写",
+            description = "head.json 与快照都是覆盖写，服务器必须允许覆盖，不能返回 409 或做不可变存储。"
+        )
+        HelpEntry(
+            name = "下载的 404 有特殊含义",
+            description = "404 表示「云端还没有这份数据」，是正常情况；" +
+                "返回 200 + 空 body 会被当成解析失败。其它非 200 一律算同步失败。"
+        )
+        HelpEntry(
+            name = "上传失败不会当场报错",
+            description = "应用目前不检查上传返回码。签名错误这类失败会先表现为其它设备报" +
+                "「增量 N 不存在」，排错时可以先在脚本里 console.log 出返回码。"
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        HelpSectionTitle("可用宿主函数")
 
         HOST_APIS.forEach { (name, description) ->
             HelpEntry(name = name, description = description)
@@ -707,14 +730,26 @@ private fun ScriptApiHelp(modifier: Modifier = Modifier) {
         Spacer(Modifier.height(12.dp))
 
         Text(
-            text = "保存脚本会重建 JS 引擎并立即触发一次同步；语法错误会显示在编辑区下方。",
+            text = "保存脚本会重建 JS 引擎并立即触发一次同步；语法错误会显示在编辑区下方。" +
+                "完整的协议说明与腾讯云 COS 参考脚本见 README。",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
 
-/** 说明里的一行：等宽的函数签名 + 中文注释。 */
+/** 说明里的小标题。 */
+@Composable
+private fun HelpSectionTitle(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.primary
+    )
+    Spacer(Modifier.height(6.dp))
+}
+
+/** 说明里的一行：等宽的函数签名（或要点）+ 中文解释。 */
 @Composable
 private fun HelpEntry(name: String, description: String) {
     Column(modifier = Modifier.padding(vertical = 3.dp)) {
