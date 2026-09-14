@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
@@ -128,20 +129,13 @@ fun SettingsPage(
                 if (themeState.hasPendingPreview) {
                     Spacer(Modifier.height(12.dp))
 
-                    Text(
-                        text = "预览中，尚未保存",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-
-                    Spacer(Modifier.height(12.dp))
-
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { themeViewModel.confirmPreview() }) {
-                            Text("保存")
-                        }
+                    Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
                         OutlinedButton(onClick = { themeViewModel.cancelPreview() }) {
                             Text("取消")
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Button(onClick = { themeViewModel.confirmPreview() }) {
+                            Text("保存")
                         }
                     }
                 }
