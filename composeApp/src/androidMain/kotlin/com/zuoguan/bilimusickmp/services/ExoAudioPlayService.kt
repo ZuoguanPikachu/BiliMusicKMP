@@ -47,14 +47,12 @@ class ExoAudioPlayService(
 ): AudioPlayService {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    // 全曲目共用一个 OkHttpClient / DataSource.Factory，避免每首歌新建连接池与线程
+    // 全曲目共用一个 OkHttpClient：连接池与线程由它复用，不必每首歌重建。
+    // 但 DataSource.Factory 不能共用，原因见 buildMediaSource。
     private val okHttpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
         .build()
-
-    @OptIn(UnstableApi::class)
-    private val dataSourceFactory = OkHttpDataSource.Factory(okHttpClient)
 
     @OptIn(UnstableApi::class)
     val player: ExoPlayer = ExoPlayer.Builder(context)
@@ -194,7 +192,12 @@ class ExoAudioPlayService(
             }
         }
 
-        val factory = dataSourceFactory
+        // 每个媒体源都新建一个 Factory：Factory 上的 request properties 是可变共享状态，
+        // 而且 OkHttpDataSource 在真正发起请求时才去读它。共用一个 Factory 会让后一次
+        // setDefaultRequestProperties 把先前的请求头覆盖掉——歌单播放会预取下一首，于是
+        // 当前曲目被套上"下一首"的请求头（Referer / Host / User-Agent），相邻两首来自不同
+        // 音源时必然取不到流，表现为"某些歌在歌单里点不动，搜索页却能播"。
+        val factory = OkHttpDataSource.Factory(okHttpClient)
             .setDefaultRequestProperties(headers)
 
         val mediaMetadata = MediaMetadata.Builder()
