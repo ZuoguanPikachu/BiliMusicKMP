@@ -60,8 +60,15 @@ import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import com.mikepenz.markdown.m3.Markdown
+import com.mikepenz.markdown.m3.markdownColor
+import com.mikepenz.markdown.m3.markdownTypography
 import com.zuoguan.bilimusickmp.LocalSnackBarHostState
 import com.zuoguan.bilimusickmp.models.DarkMode
 import com.zuoguan.bilimusickmp.models.ProjectInfo
@@ -469,11 +476,7 @@ private fun UpdateAvailableCard(
 
         release.notes?.let { notes ->
             Spacer(Modifier.height(8.dp))
-            Text(
-                text = notes,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            ReleaseNotes(notes)
         }
 
         Spacer(Modifier.height(12.dp))
@@ -482,6 +485,51 @@ private fun UpdateAvailableCard(
             Text("前往下载")
         }
     }
+}
+
+/**
+ * 更新说明区：GitHub Release 的 `body` 是 Markdown（作者可能顺手写进 HTML 片段），
+ * 当纯文本渲染会把 `##`、`-`、`**`、链接地址原样露出来，所以交给 Markdown 渲染器排版。
+ *
+ * 两点必须覆盖库的默认值：
+ * - `modifier` 默认是 `fillMaxSize`，在卡片这种外层 Column 里会把高度全占掉；
+ * - 标题默认用 displayLarge/displayMedium 一档，放在设置页卡片里大得离谱，
+ *   这里统一压到 bodySmall / titleSmall，链接色换成主题的 primary（默认是加粗黑字）。
+ */
+@Composable
+private fun ReleaseNotes(markdown: String) {
+    val body = MaterialTheme.typography.bodySmall
+    val heading = MaterialTheme.typography.titleSmall
+    val code = body.copy(fontFamily = FontFamily.Monospace)
+
+    Markdown(
+        content = markdown,
+        modifier = Modifier.fillMaxWidth(),
+        colors = markdownColor(text = MaterialTheme.colorScheme.onSurfaceVariant),
+        typography = markdownTypography(
+            h1 = heading,
+            h2 = heading,
+            h3 = heading,
+            h4 = heading,
+            h5 = heading,
+            h6 = heading,
+            text = body,
+            paragraph = body,
+            list = body,
+            ordered = body,
+            bullet = body,
+            quote = body,
+            table = body,
+            code = code,
+            inlineCode = code,
+            textLink = TextLinkStyles(
+                style = SpanStyle(
+                    color = MaterialTheme.colorScheme.primary,
+                    textDecoration = TextDecoration.Underline
+                )
+            ),
+        ),
+    )
 }
 
 /**

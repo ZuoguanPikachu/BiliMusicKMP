@@ -17,6 +17,9 @@ kotbase = "3.2.4-1.2.0"
 kotlin = "2.3.0"
 kotlinx-coroutines = "1.10.2"
 kotlinx-serialization = "1.6.0"
+# 与项目 Kotlin 2.3.0 对齐：0.39.2 是用 Kotlin 2.3.0 构建的最后一个版本，
+# 再新的 0.40+ 要求 kotlin-stdlib 2.3.2x / 2.4.x，编译器会拒绝其元数据
+markdownRenderer = "0.39.2"
 materialkolor = "2.0.2"
 okhttp = "5.3.2"
 org-json = "20251224"
@@ -46,6 +49,7 @@ kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotl
 kotlinx-coroutinesSwing = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-swing", version.ref = "kotlinx-coroutines" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
 materialkolor = { module = "com.materialkolor:material-kolor", version.ref = "materialkolor" }
+multiplatform-markdown-renderer-m3 = { module = "com.mikepenz:multiplatform-markdown-renderer-m3", version.ref = "markdownRenderer" }
 okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
 org-json = { module = "org.json:json", version.ref = "org-json" }
 quickjs-kt = { module = "io.github.dokar3:quickjs-kt", version.ref = "quickjs" }

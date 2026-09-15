@@ -71,6 +71,8 @@ kotlin {
             implementation(libs.androidx.lifecycle.runtimeCompose)
             implementation(compose.materialIconsExtended)
             implementation(libs.materialkolor)
+            // Release 更新说明是 Markdown，用它排版；-m3 变体自带 Material3 默认样式
+            implementation(libs.multiplatform.markdown.renderer.m3)
             implementation(libs.okhttp)
             implementation(libs.org.json)
             implementation(libs.koin.core)

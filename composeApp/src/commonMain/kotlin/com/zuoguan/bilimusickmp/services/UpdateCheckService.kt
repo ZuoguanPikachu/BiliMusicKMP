@@ -21,7 +21,7 @@ data class ReleaseInfo(
     val version: String,
     /** Release 页面地址，交给系统浏览器打开。 */
     val pageUrl: String,
-    /** 更新说明，已截断，可能为 null。 */
+    /** 更新说明，GitHub Release 的 Markdown（换行已归一成 LF），可能为 null。 */
     val notes: String?
 )
 
@@ -50,9 +50,6 @@ class UpdateCheckService {
     companion object {
         private const val LATEST_RELEASE_URL =
             "https://api.github.com/repos/${ProjectInfo.REPO_SLUG}/releases/latest"
-
-        /** 更新说明过长会把设置页撑得很长，只保留开头这么多字符。 */
-        private const val NOTES_MAX_LENGTH = 500
     }
 
     private val client = OkHttpClient.Builder()
@@ -106,17 +103,10 @@ class UpdateCheckService {
                 ReleaseInfo(
                     version = tag.removePrefix("v").removePrefix("V"),
                     pageUrl = release.htmlUrl,
-                    notes = formatNotes(release.body)
+                    notes = formatReleaseNotes(release.body)
                 )
             )
         }
-    }
-
-    /** 截断更新说明；内容为空时返回 null，界面据此不渲染说明区。 */
-    private fun formatNotes(body: String?): String? {
-        val text = body?.trim().orEmpty()
-        if (text.isEmpty()) return null
-        return if (text.length > NOTES_MAX_LENGTH) text.take(NOTES_MAX_LENGTH) + "…" else text
     }
 
     /** 把 HTTP 状态码翻译成用户能看懂的一句话。 */
@@ -126,6 +116,23 @@ class UpdateCheckService {
         else -> "检查更新失败（HTTP $code）"
     }
 }
+
+/**
+ * 规整更新说明：统一换行、去掉首尾空白，内容为空时返回 null，界面据此不渲染说明区。
+ *
+ * 必须把 CRLF 归一成 LF：GitHub 的 body 通常是 `\r\n`，而 Markdown 解析器会把 `\r` 当作正文、
+ * 把 `\n\r` 当作行尾，于是**空行不再被识别成段落分隔**。后果是末尾的 HTML 脚注
+ * （`<sub>Assisted by…</sub>`）被当作上一条列表项的续行，软换行又渲染成空格，
+ * 于是脚注和上一行挤在一起。归一成 LF 后段落分隔恢复正常，脚注回到独立的一行。
+ *
+ * 这里不截断长度：说明交给界面按块排版后长文可以正常阅读，截断反而会切在标记中间，
+ * 把渲染结果弄坏。
+ */
+internal fun formatReleaseNotes(body: String?): String? = body
+    ?.replace("\r\n", "\n")
+    ?.replace('\r', '\n')
+    ?.trim()
+    ?.takeIf { it.isNotEmpty() }
 
 /** `releases/latest` 响应中本项目用到的字段。 */
 @Serializable
