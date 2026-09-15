@@ -71,7 +71,9 @@ fun TagsEditor(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            allTags.distinct().forEach { tag ->
+            // 已选标签必须一并列出：刚输入的新标签此时还不在仓库的 allTags 里，
+            // 只遍历 allTags 会让它直到保存后才出现，用户看不到自己刚加的标签。
+            (allTags + selectedTags).distinct().forEach { tag ->
                 TagChip(tag, tag in selectedTags, onToggleTag)
             }
         }
