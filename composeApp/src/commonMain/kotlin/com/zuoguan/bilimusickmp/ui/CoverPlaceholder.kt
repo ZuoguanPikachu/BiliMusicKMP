@@ -19,13 +19,18 @@ import androidx.compose.ui.unit.dp
 /**
  * 无封面时的占位图：圆角底板加一个音符图标。
  *
- * @param size 占位块边长，图标按一半边长缩放。
+ * @param size 占位块边长，图标按一半边长缩放；调用方用 [modifier] 撑满容器时该值会被容器约束覆盖。
  * @param radius 圆角半径。
+ * @param modifier 作用于占位块本身，用于撑满固定比例的封面槽（如搜索结果卡片）。
  */
 @Composable
-fun CoverPlaceholder(size: Dp = 48.dp, radius: Dp = 6.dp) {
+fun CoverPlaceholder(
+    size: Dp = 48.dp,
+    radius: Dp = 6.dp,
+    modifier: Modifier = Modifier,
+) {
     Box(
-        modifier = Modifier
+        modifier = modifier
             .size(size)
             .clip(RoundedCornerShape(radius))
             .background(MaterialTheme.colorScheme.surfaceVariant),

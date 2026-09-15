@@ -67,7 +67,7 @@ fun MobileSearchResultItem(
             ) {
 
                 if (item.pic.isBlank()) {
-                    CoverPlaceholder()
+                    CoverPlaceholder(radius = 12.dp, modifier = Modifier.fillMaxSize())
                 } else when (val resource = asyncPainterResource(convertImageUrl(item.pic, 320, 200))) {
                     is Resource.Loading -> {
                         CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
@@ -80,12 +80,10 @@ fun MobileSearchResultItem(
                             contentScale = ContentScale.Crop
                         )
                     }
+                    // 拉取失败与"本来就没有封面"用同一套占位（其余页面同样是这个约定），
+                    // 需要重试时把条目滚出屏幕再回来，Kamel 只缓存成功结果，会重新发起请求。
                     is Resource.Failure -> {
-                        Box(modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color.Gray)) {
-                            Text("加载失败", modifier = Modifier.align(Alignment.Center))
-                        }
+                        CoverPlaceholder(radius = 12.dp, modifier = Modifier.fillMaxSize())
                     }
                 }
 
@@ -172,7 +170,7 @@ fun PcSearchResultItem(
                     .aspectRatio(1.6f)
             ) {
                 if (item.pic.isBlank()) {
-                    CoverPlaceholder()
+                    CoverPlaceholder(radius = 12.dp, modifier = Modifier.fillMaxSize())
                 } else when (val resource = asyncPainterResource(convertImageUrl(item.pic, 512, 320))) {
                     is Resource.Loading -> {
                         CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
@@ -188,12 +186,9 @@ fun PcSearchResultItem(
                                 .clip(RoundedCornerShape(12.dp))
                         )
                     }
+                    // 与移动端及 App 内其它封面失败分支保持一致：只给占位图，不再单独渲染错误块
                     is Resource.Failure -> {
-                        Box(modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color.Gray)) {
-                            Text("加载失败", modifier = Modifier.align(Alignment.Center))
-                        }
+                        CoverPlaceholder(radius = 12.dp, modifier = Modifier.fillMaxSize())
                     }
                 }
 
