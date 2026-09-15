@@ -64,21 +64,30 @@ class SongEditorViewModel(
      * 网易云/酷狗的结果字段已经直接可用，不需要这一步。
      */
     fun openForCreate(song: Song) {
-        val needsResolve = song.audioSource == AudioSource.BILI_BILI
-        startSession(song, isCreating = true, isLoading = needsResolve) {
-            songMetadataService.resolve(song)
-        }
+        startSession(song, isCreating = true, prepare = resolveIfNeeded(song))
     }
+
+    /**
+     * 新建时是否要补全：只有 B 站的搜索结果需要。
+     *
+     * 网易云/酷狗的搜索结果本身就是完整的歌曲（歌名、歌手、封面、歌词 ID 都已就位），
+     * 再走一遍 LLM 抽取与平台反查只会把它们悄悄改写成别的匹配结果，因此返回 null 跳过。
+     */
+    private fun resolveIfNeeded(song: Song): (suspend () -> Song)? =
+        if (song.audioSource == AudioSource.BILI_BILI) {
+            { songMetadataService.resolve(song) }
+        } else {
+            null
+        }
 
     /** 编辑歌单里已有的歌曲：字段都是现成的，不需要补全。 */
     fun openForEdit(song: Song) {
-        startSession(song, isCreating = false, isLoading = false, prepare = null)
+        startSession(song, isCreating = false, prepare = null)
     }
 
     private fun startSession(
         song: Song,
         isCreating: Boolean,
-        isLoading: Boolean,
         prepare: (suspend () -> Song)?,
     ) {
         // 切换到新的编辑对象，上一个会话的补全结果已无意义
@@ -87,7 +96,8 @@ class SongEditorViewModel(
             it.copy(
                 isOpen = true,
                 isCreating = isCreating,
-                isLoading = isLoading,
+                // 加载态只描述"正在等补全结果"，因此与补全任务同生共死：没有任务就不该转圈
+                isLoading = prepare != null,
                 draft = song,
             )
         }
