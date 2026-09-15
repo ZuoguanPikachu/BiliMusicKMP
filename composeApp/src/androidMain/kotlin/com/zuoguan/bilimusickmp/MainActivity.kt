@@ -265,7 +265,14 @@ fun ContentArea(
                     )
                 }
                 Page.LYRICS   -> LyricsPage()
-                Page.SONG_EDIT -> SongEditPage()
+                Page.SONG_EDIT -> SongEditPage(
+                    // 与设置页同一套 inset 规则：innerPadding 已经由上面的 Row 让过位，
+                    // 先消费掉再 imePadding，键盘才不会把导航栏那段高度再算一遍。
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .consumeWindowInsets(innerPadding)
+                        .imePadding()
+                )
             }
         }
     }
