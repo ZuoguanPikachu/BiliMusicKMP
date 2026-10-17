@@ -33,7 +33,8 @@ fun SongInfoEditDialog(
                 enabled = !state.isLoading && state.draft != null,
                 onClick = onConfirm
             ) {
-                Text("确定")
+                // 写的是歌单里已有的记录时，按钮说「保存」比「确定」更贴切
+                Text(if (state.isUpdate) "保存" else "添加")
             }
         },
         dismissButton = {

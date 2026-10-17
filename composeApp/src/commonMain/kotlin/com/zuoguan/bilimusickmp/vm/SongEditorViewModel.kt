@@ -28,6 +28,8 @@ import kotlinx.coroutines.launch
  *   因为 [Song] 不可变，草稿与仓库列表里的实例天然隔离，取消编辑不会污染原对象。
  * - 打开方式区分意图而不是靠来源页面字符串：新建走 [openForCreate]（按需补全元数据），
  *   编辑已有歌曲走 [openForEdit]。
+ * - 歌单以歌曲 id 为主键，同一首歌只可能有一条：[openForCreate] 命中已有条目时不会
+ *   再新建，而是打开本地那条并让界面标注，避免搜索结果的原始字段覆盖用户调好的信息。
  * - 两个平台共用同一个状态源，差异只在于用整页还是用对话框承载。
  */
 class SongEditorViewModel(
@@ -57,14 +59,24 @@ class SongEditorViewModel(
     // ---------- 打开 / 关闭 ----------
 
     /**
-     * 从搜索结果新建歌曲。
+     * 从搜索结果添加歌曲。
      *
      * B 站视频的标题是原始投稿标题（"【4K60FPS】陈奕迅《人来人往》…"），
      * 需要先用 LLM 提取歌名/歌手，再据此补出酷狗的歌词与封面 ID，同时取回 cid。
      * 网易云/酷狗的结果字段已经直接可用，不需要这一步。
+     *
+     * 歌单里已经有同一首歌（歌曲 id 相同）时不再新建：直接打开本地已保存的那一条，
+     * 并置上 [SongEditorState.isAddingExistingSong]，由界面标注「歌曲已在歌单中」。
+     * 这样用户之前调好的歌名、标签、歌词/封面来源不会被搜索结果的原始字段冲掉，
+     * 也不会在这里产生第二条记录（歌单以歌曲 id 为主键，本来就不可能重复）。
      */
     fun openForCreate(song: Song) {
-        startSession(song, isCreating = true, prepare = resolveIfNeeded(song))
+        val existing = songRepository.getSongById(song.id)
+        if (existing != null) {
+            startSession(existing, isCreating = true, isUpdate = true, prepare = null)
+            return
+        }
+        startSession(song, isCreating = true, isUpdate = false, prepare = resolveIfNeeded(song))
     }
 
     /**
@@ -82,12 +94,13 @@ class SongEditorViewModel(
 
     /** 编辑歌单里已有的歌曲：字段都是现成的，不需要补全。 */
     fun openForEdit(song: Song) {
-        startSession(song, isCreating = false, prepare = null)
+        startSession(song, isCreating = false, isUpdate = true, prepare = null)
     }
 
     private fun startSession(
         song: Song,
         isCreating: Boolean,
+        isUpdate: Boolean,
         prepare: (suspend () -> Song)?,
     ) {
         // 切换到新的编辑对象，上一个会话的补全结果已无意义
@@ -96,6 +109,7 @@ class SongEditorViewModel(
             it.copy(
                 isOpen = true,
                 isCreating = isCreating,
+                isUpdate = isUpdate,
                 // 加载态只描述"正在等补全结果"，因此与补全任务同生共死：没有任务就不该转圈
                 isLoading = prepare != null,
                 draft = song,
@@ -189,14 +203,35 @@ class SongEditorViewModel(
 
     /** 保存并关闭会话；调用方（整页/对话框外壳）负责各自的关闭动作。 */
     fun save() {
-        val draft = _uiState.value.draft ?: return
-        // 未填标签的歌曲归入 Default 标签
-        val toSave = draft.copy(tags = draft.tags.ifEmpty { listOf("Default") })
+        val state = _uiState.value
+        val draft = state.draft ?: return
+        persist(draft.forSave(), updated = state.isUpdate)
+    }
 
+    /** 未填标签的歌曲归入 Default 标签。 */
+    private fun Song.forSave(): Song = copy(tags = tags.ifEmpty { listOf("Default") })
+
+    /**
+     * 落库并关闭会话。
+     *
+     * 写库是异步的，失败时保留会话与草稿，用户可以直接重试。
+     *
+     * @param updated true 表示写的是歌单里已有的条目（覆盖更新），用于提示文案。
+     */
+    private fun persist(song: Song, updated: Boolean) {
         scope.launch {
             try {
-                songRepository.saveSong(toSave)
+                songRepository.saveSong(song)
                 _uiState.update { SongEditorState(allTags = it.allTags) }
+                _uiEvents.send(
+                    UiEvent.ShowSnackBar(
+                        message = if (updated) {
+                            "已更新歌单中的「${song.title}」"
+                        } else {
+                            "已添加到歌单"
+                        }
+                    )
+                )
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -214,11 +249,21 @@ class SongEditorViewModel(
 data class SongEditorState(
     /** 是否有正在进行的编辑会话。 */
     val isOpen: Boolean = false,
-    /** true = 新建（来自搜索结果），false = 编辑已有歌曲。 */
+    /** true = 从搜索结果进入的添加流程，false = 从歌单进入的编辑流程。 */
     val isCreating: Boolean = false,
     /** 正在等待元数据补全。 */
     val isLoading: Boolean = false,
+    /** 本次保存的是歌单里已有的记录（更新），而不是新增。 */
+    val isUpdate: Boolean = false,
     /** 编辑中的副本；为 null 表示还没有内容可编辑。 */
     val draft: Song? = null,
     val allTags: List<String> = emptyList(),
-)
+) {
+    /**
+     * 点「添加」却命中了歌单里已有的歌曲：界面要标注「歌曲已在歌单中」。
+     *
+     * 从歌单进去编辑同一首歌（[isUpdate] 为 true 但 [isCreating] 为 false）不需要标注，
+     * 用户本来就知道自己在编辑哪一条。
+     */
+    val isAddingExistingSong: Boolean get() = isCreating && isUpdate
+}
