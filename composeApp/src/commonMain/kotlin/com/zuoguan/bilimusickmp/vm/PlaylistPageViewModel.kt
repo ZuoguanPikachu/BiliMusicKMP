@@ -136,7 +136,15 @@ class PlaylistPageViewModel(
 
     /** 把过滤后的列表同步给播放服务，使上一首/下一首按当前视图顺序播放。 */
     suspend fun updatePlaylist(list: List<Song>) {
-        audioPlayService.updatePlaylist(list.map { it.toTrackInfo() })
+        val tracks = list.map { it.toTrackInfo() }
+        audioPlayService.updatePlaylist(tracks)
+
+        // 正在播放的歌也可能刚被编辑过（改名/换封面）：用最新元数据刷新播放条，但不重新起播。
+        // 只处理「从歌单播放」的曲目：搜索页试听的同一首歌不该因为歌单刷新就变成歌单来源
+        // （那会让歌单页把它高亮成正在播放）。歌曲被标签筛掉时列表里找不到它，同样保持原样。
+        val current = audioPlayService.currentTrack.value ?: return
+        if (current.playSource != PlaySource.PLAYLIST) return
+        tracks.firstOrNull { it.id == current.id }?.let { audioPlayService.refreshCurrentTrack(it) }
     }
 
     private fun Song.toTrackInfo(): TrackInfo = TrackInfo(

@@ -152,6 +152,12 @@ class VlcAudioPlayService : AudioPlayService {
         mediaPlayer.media().play(url, *options)
     }
 
+    override suspend fun refreshCurrentTrack(track: TrackInfo) {
+        // 只换展示用的元数据：当前没在播这首歌（含已停止）就不该凭空造出一个"正在播放"
+        if (_currentTrack.value?.id != track.id) return
+        _currentTrack.value = track
+    }
+
     override suspend fun pause() {
         mediaPlayer.controls().pause()
     }

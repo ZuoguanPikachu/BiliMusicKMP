@@ -255,6 +255,14 @@ class ExoAudioPlayService(
         }
     }
 
+    override suspend fun refreshCurrentTrack(track: TrackInfo) {
+        // 只换展示用的元数据：当前没在播这首歌（含已停止）就不该凭空造出一个"正在播放"。
+        // 播放器里的 MediaItem 不动，避免为了改标题而重新起播；通知栏标题因此会略滞后，
+        // 重新播放或切歌后自然同步。
+        if (_currentTrack.value?.id != track.id) return
+        _currentTrack.value = track
+    }
+
     /** 自动续播：接上预取好的下一首，或回退到完整地起播下一首。 */
     fun autoNext(mediaItem: MediaItem?) {
         val next = getNextTrack() ?: return

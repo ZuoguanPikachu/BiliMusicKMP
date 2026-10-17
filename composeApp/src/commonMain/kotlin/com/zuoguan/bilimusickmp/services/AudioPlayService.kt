@@ -40,6 +40,15 @@ interface AudioPlayService {
 
     /** 播放指定曲目：会调用 [TrackInfo.urlProvider] 取地址，并复位进度、更新 [currentTrack]。 */
     suspend fun play(track: TrackInfo)
+
+    /**
+     * 用同一首歌的最新元数据刷新 [currentTrack]，不打断正在播放的音频。
+     *
+     * 歌单里编辑歌曲（改名、换封面）后调用：播放条要跟着更新，但音频不该从头再来一遍。
+     * id 与当前曲目不同则静默忽略。
+     */
+    suspend fun refreshCurrentTrack(track: TrackInfo)
+
     /** 暂停并保留播放位置。 */
     suspend fun pause()
     /** 从暂停处继续播放。 */
