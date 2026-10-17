@@ -72,7 +72,8 @@ class LyricsPageViewModel(
     private suspend fun loadLyricsInternal(track: TrackInfo) {
         val savedBias = songRepositoryService.getSongById(track.id)?.lyricBias ?: track.lyricBias
 
-        _uiState.update { it.copy(lyrics = emptyList()) }
+        // 先清空并置为加载中：换歌时不该继续显示上一首的歌词，界面也借此显示转圈
+        _uiState.update { it.copy(lyrics = emptyList(), isLoading = true) }
 
         val lyrics = runCatching{
             track.lyricsProvider()
@@ -87,18 +88,35 @@ class LyricsPageViewModel(
                 },
                 currentTrack = track,
                 savedLyricBias = savedBias,
-                lyricBiasDraft = null
+                lyricBiasDraft = null,
+                isLoading = false
             )
         }
     }
 
-    /** 手动重新拉取指定曲目的歌词（刷新按钮）。 */
-    fun loadLyrics(track: TrackInfo) {
+    /** 重新拉取当前曲目的歌词（刷新按钮）；还没有曲目时忽略。 */
+    fun refreshLyrics() {
+        val track = _uiState.value.currentTrack ?: return
         scope.launch {
             loadLyricsInternal(track)
         }
     }
 
+    /** 播放/暂停切换：窄屏歌词页没有底部播放栏，靠它控制播放。 */
+    fun togglePlayPause() {
+        val state = _uiState.value
+        if (state.currentTrack == null) return
+        scope.launch {
+            if (state.isPlaying) audioPlayService.pause() else audioPlayService.resume()
+        }
+    }
+
+    /** 切到下一首：歌词页隐藏播放栏的平台靠它换歌。 */
+    fun playNext() {
+        scope.launch {
+            audioPlayService.playNext()
+        }
+    }
 
     /** 跳转到歌词行对应的播放位置。 */
     fun seekTo(time: Long) {
@@ -143,6 +161,8 @@ data class LyricsUiState(
     val lyrics: List<LyricLine> = emptyList(),
     val currentPositionMs: Long = 0L,
     val isPlaying: Boolean = false,
+    /** 正在拉取歌词，界面显示加载状态。 */
+    val isLoading: Boolean = false,
     /** 仓库里已保存的歌词延时（毫秒）。 */
     val savedLyricBias: Int = 0,
     /** 还没保存的歌词延时草稿；null 表示没有改动。 */

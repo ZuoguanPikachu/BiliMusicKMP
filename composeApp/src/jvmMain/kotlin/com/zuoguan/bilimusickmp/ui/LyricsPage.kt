@@ -1,172 +1,25 @@
 package com.zuoguan.bilimusickmp.ui
 
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.*
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Timer
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.*
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.painter.Painter
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.*
-import com.zuoguan.bilimusickmp.utils.convertImageUrl
-import org.koin.compose.koinInject
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import com.zuoguan.bilimusickmp.vm.LyricsPageViewModel
-import io.kamel.core.Resource
-import io.kamel.image.asyncPainterResource
-
+import org.koin.compose.koinInject
 
 /**
- * 歌词页：左侧封面与曲目信息，右侧歌词列表。
+ * 桌面端歌词页：宽屏左右分栏（左封面右歌词），窗口变窄时自动切成上下排布。
  *
- * 高亮行由播放进度与歌词延时（bias）推导，列表随后自动滚动到该行；
+ * 底部播放栏一直可见，所以这里不传播放/暂停按钮。
  */
 @Composable
 fun LyricsPage(viewModel: LyricsPageViewModel = koinInject()) {
     val uiState by viewModel.uiState.collectAsState()
-    val currentTrack = uiState.currentTrack
-    val bias = uiState.lyricBias
-    val listState = rememberLazyListState()
-    val currentIndex = remember(uiState.currentPositionMs, uiState.lyrics, bias) {
-        uiState.lyrics.indexOfLast { it.timeMs + bias <= uiState.currentPositionMs }
-    }
-    val density = LocalDensity.current
-    // 量出页面高度，用来给歌词列表设置上下留白，使高亮行落在垂直中间
-    var height by remember { mutableStateOf(0.dp) }
 
-    LaunchedEffect(currentIndex) {
-        // -1 表示"还没有任何一句开始"
-        if (currentIndex < 0) return@LaunchedEffect
-        // 用户正在手动滚动时不要抢滚动位置
-        if (listState.isScrollInProgress) return@LaunchedEffect
-        listState.animateScrollToItem(index = currentIndex)
-    }
-
-    Row(
-        modifier = Modifier.onGloballyPositioned { coordinates ->
-            height = with(density) {
-                coordinates.size.height.toDp()
-            }
-        }
-    ){
-        Column(
-            modifier = Modifier.weight(4f).fillMaxHeight(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ){
-            when (val resource = asyncPainterResource(convertImageUrl(uiState.currentTrack?.pic ?: "", 512, 512))) {
-                is Resource.Loading -> {}
-                is Resource.Success -> {
-                    val painter: Painter = resource.value
-                    Image(
-                        painter,
-                        contentDescription = "Cover",
-                        modifier = Modifier
-                            .size(384.dp)
-                            .clip(RoundedCornerShape(8.dp)),
-                    )
-                }
-
-                is Resource.Failure -> {
-                    CoverPlaceholder(size = 384.dp, radius = 8.dp)
-                }
-            }
-
-            Spacer(Modifier.height(12.dp))
-
-             Row(
-                modifier = Modifier.width(384.dp),
-            ){
-                Column(
-                    modifier = Modifier.weight(1f)
-                ) {
-                    if (currentTrack != null) {
-                        Text(
-                            text = currentTrack.title,
-                            style = MaterialTheme.typography.titleMedium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-
-                    if (currentTrack != null) {
-                        Text(
-                            text = currentTrack.author,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-            }
-
-        }
-
-        Column(
-            modifier = Modifier.weight(6f)
-        ){
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.weight(6f),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                contentPadding = PaddingValues(vertical = if (height < 100.dp) 0.dp else height / 2 - 50.dp)
-            ) {
-                itemsIndexed(uiState.lyrics) { index, line ->
-                    LyricLineItem(
-                        text = line.text,
-                        isCurrent = index == currentIndex,
-                        onClick = { viewModel.seekTo(line.timeMs + bias) }
-                    )
-                }
-            }
-
-            if (currentTrack != null) {
-                Box(
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.align(Alignment.Center),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(onClick = {}, enabled = false){
-                            Icon(Icons.Default.Timer, contentDescription = "歌词延时")
-                        }
-                        Stepper(
-                            value = bias,
-                            step = 100,
-                            onValueChange = viewModel::updateLyricBias
-                        )
-                        IconButton(onClick = {
-                            viewModel.saveLyricBias()
-                        }, enabled = uiState.isLyricBiasDirty){
-                            Icon(Icons.Default.Check, contentDescription = "保存")
-                        }
-                    }
-
-                    Row(
-                        modifier = Modifier.align(Alignment.CenterEnd).padding(horizontal = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ){
-                        IconButton(
-                            onClick = {
-                                viewModel.loadLyrics(currentTrack)
-                            }
-                        ){
-                            Icon(Icons.Default.Refresh, contentDescription = "刷新歌词")
-                        }
-                    }
-                }
-            }
-        }
-    }
+    LyricsScreen(
+        state = uiState,
+        onSeek = viewModel::seekTo,
+        onBiasChange = viewModel::updateLyricBias,
+        onSaveBias = viewModel::saveLyricBias,
+        onRefresh = viewModel::refreshLyrics,
+    )
 }
