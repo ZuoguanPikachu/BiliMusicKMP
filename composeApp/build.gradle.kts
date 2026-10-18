@@ -1,5 +1,6 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -11,6 +12,33 @@ plugins {
 }
 
 val appVersion: String = providers.gradleProperty("app.version").get()
+
+/**
+ * 发布签名配置。
+ *
+ * 口令不进仓库：值来自两处，命令行 `-P` 优先（publish.ps1 会把脚本开头的四个变量透传进来），
+ * 其次是本机的 local.properties（已被 .gitignore 忽略）。四项齐全才给 release 配签名，
+ * 缺任意一项就退回未签名，别人 clone 下来照样能构建。
+ */
+val localSigningProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.isFile) file.inputStream().use { load(it) }
+}
+
+fun signingValue(name: String): String? =
+    providers.gradleProperty(name).orNull?.takeIf { it.isNotBlank() }
+        ?: localSigningProperties.getProperty(name)?.takeIf { it.isNotBlank() }
+
+val releaseKeystore: File? = signingValue("release.keystore.path")
+    ?.let { rootProject.file(it) }
+    ?.takeIf { it.isFile }
+val releaseKeystorePassword: String? = signingValue("release.keystore.password")
+val releaseKeyAlias: String? = signingValue("release.key.alias")
+val releaseKeyPassword: String? = signingValue("release.key.password")
+val hasReleaseSigning: Boolean = releaseKeystore != null &&
+        releaseKeystorePassword != null &&
+        releaseKeyAlias != null &&
+        releaseKeyPassword != null
 
 val appVersionCode: Int = run {
     val parts = appVersion.substringBefore("-").split(".")
@@ -117,9 +145,22 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = releaseKeystore
+                storePassword = releaseKeystorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
     buildTypes {
         getByName("release") {
             isMinifyEnabled = false
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     compileOptions {

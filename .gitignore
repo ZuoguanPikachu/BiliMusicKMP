@@ -18,3 +18,5 @@ captures
 **/xcshareddata/WorkspaceSettings.xcsettings
 node_modules/
 composeApp/release
+# 打包脚本里有 keystore 口令，只留在本地
+publish.ps1
