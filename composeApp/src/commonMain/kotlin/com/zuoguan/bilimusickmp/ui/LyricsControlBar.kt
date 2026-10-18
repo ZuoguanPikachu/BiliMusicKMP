@@ -1,10 +1,5 @@
 package com.zuoguan.bilimusickmp.ui
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandHorizontally
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -143,22 +138,19 @@ fun LyricsControlBar(
             )
 
             if (compact) {
-                // 窄栏只在有改动时才出现保存键：平时省下 40dp，给加减和数值留出放大字体的余量
-                AnimatedVisibility(
-                    visible = isDirty,
-                    enter = fadeIn() + expandHorizontally(expandFrom = Alignment.Start),
-                    exit = fadeOut() + shrinkHorizontally(shrinkTowards = Alignment.Start),
+                // 比加减键小一圈，右端再留出空隙：贴着胶囊边缘时看着像胶囊被切开了一块
+                FilledTonalIconButton(
+                    onClick = onSave,
+                    enabled = isDirty,
+                    modifier = Modifier
+                        .padding(end = 6.dp)
+                        .size(34.dp)
                 ) {
-                    FilledTonalIconButton(
-                        onClick = onSave,
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = "保存歌词延时",
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = "保存歌词延时",
+                        modifier = Modifier.size(16.dp)
+                    )
                 }
             } else {
                 FilledTonalButton(
