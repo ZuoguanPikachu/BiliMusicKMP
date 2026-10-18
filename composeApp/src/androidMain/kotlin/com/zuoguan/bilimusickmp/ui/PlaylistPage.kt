@@ -206,7 +206,7 @@ fun SongItem(
             modifier = Modifier.padding(8.dp)
         ) {
             when (val resource = asyncPainterResource(convertImageUrl(song.pic, 128, 128))) {
-                is Resource.Loading -> {}
+                is Resource.Loading -> CoverPlaceholder()
                 is Resource.Success -> {
                     val painter: Painter = resource.value
                     Image(

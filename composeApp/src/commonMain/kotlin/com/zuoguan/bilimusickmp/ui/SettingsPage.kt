@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -57,6 +58,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.semantics.Role
@@ -621,8 +623,22 @@ private fun DarkModeChips(
     }
 }
 
+/** 主题色块边长与基础间隔；换行时间隔会在基础值之上动态撑开。 */
+private val ThemeSwatchSize = 64.dp
+private val ThemeSwatchSpacing = 12.dp
+
 /**
  * 主题色选择器：把候选种子色平铺成色块，点击即预览。
+ *
+ * 每行能放下几个就放几个：宽度够就 12 个一行；只够 11 个时排成 11+1，
+ * 第二行那一个仍然贴左边（与第一行第一个对齐），依此类推。
+ *
+ * 间隔分两种情况：
+ * - 一行放得下全部：固定 [ThemeSwatchSpacing]，不去撑满。宽窗口下把 12 个色块摊到整行
+ *   会被拉到 40dp 以上的间隔，又散又不像一组，宁可让右侧空着。
+ * - 需要换行：间隔按「这一行刚好铺满可用宽度」反解。左侧贴住「主题颜色」标签，
+ *   右侧留白与左侧一致，放不下的那点余量由间隔吸收，免得全堆在右边显得没对齐。
+ *   末行不满时沿用同一个间隔左对齐，不会把最后一个色块甩到最右边。
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -631,17 +647,38 @@ private fun ThemeColorPicker(
     onSelect: (Color) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    FlowRow(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        themeColorOptions.forEach { seedColor ->
-            ThemeColorOption(
-                seedColor = seedColor,
-                selected = seedColor == selected,
-                onClick = { onSelect(seedColor) }
-            )
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+        val density = LocalDensity.current
+        // 一行最多放几个：n 个色块加 n-1 个基础间隔不超过可用宽度，即 n <= (可用宽度+基础间隔)/(边长+基础间隔)
+        val perRow =
+            ((maxWidth + ThemeSwatchSpacing) / (ThemeSwatchSize + ThemeSwatchSpacing))
+                .toInt()
+                .coerceIn(1, themeColorOptions.size)
+        val spacing = when {
+            // 一行放得下全部：固定间隔，不撑满
+            themeColorOptions.size <= perRow -> ThemeSwatchSpacing
+            // 需要换行：铺满这一行所需的间隔，可用宽度 = n*边长 + (n-1)*间隔
+            perRow > 1 && maxWidth.value.isFinite() -> with(density) {
+                // 取整像素且向下取整：FlowRow 会把间隔四舍五入到整像素，给精确值会进位，
+                // 把本行最后一个色块挤出去（本该 12 个一行却排成 11+1）
+                ((maxWidth - ThemeSwatchSize * perRow).roundToPx() / (perRow - 1)).toDp()
+            }
+            else -> ThemeSwatchSpacing
+        }
+
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            maxItemsInEachRow = perRow,
+            horizontalArrangement = Arrangement.spacedBy(spacing),
+            verticalArrangement = Arrangement.spacedBy(ThemeSwatchSpacing)
+        ) {
+            themeColorOptions.forEach { seedColor ->
+                ThemeColorOption(
+                    seedColor = seedColor,
+                    selected = seedColor == selected,
+                    onClick = { onSelect(seedColor) }
+                )
+            }
         }
     }
 }
@@ -667,7 +704,7 @@ private fun ThemeColorOption(
 
     Box(
         modifier = Modifier
-            .size(64.dp)
+            .size(ThemeSwatchSize)
             .clip(cardShape)
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .then(selectionBorder)
