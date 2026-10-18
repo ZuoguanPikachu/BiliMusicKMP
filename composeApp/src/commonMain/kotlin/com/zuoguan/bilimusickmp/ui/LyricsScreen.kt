@@ -153,7 +153,13 @@ fun LyricsScreen(
                         )
                     }
                 } else {
-                    Column(Modifier.weight(1f).fillMaxWidth()) {
+                    // 上下各留一点空白：手机端封面贴着顶部返回键、换歌按钮贴着底部导航栏都很局促
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .padding(top = 6.dp, bottom = 10.dp)
+                    ) {
                         NowPlayingCompact(
                             state = state,
                             modifier = Modifier.fillMaxWidth()
@@ -354,7 +360,10 @@ private fun LyricsPanel(
 
                     // 播放/暂停在胶囊左侧、下一曲在右侧；窄到放不下时整行才折行
                     FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                        horizontalArrangement = Arrangement.spacedBy(
+                            if (compactBar) 6.dp else 8.dp,
+                            Alignment.CenterHorizontally
+                        ),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         itemVerticalAlignment = Alignment.CenterVertically,
                     ) {

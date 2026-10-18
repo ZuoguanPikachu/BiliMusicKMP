@@ -1,5 +1,10 @@
 package com.zuoguan.bilimusickmp.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -8,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -61,7 +67,7 @@ fun LyricsControlBar(
         tonalElevation = 1.dp,
     ) {
         Row(
-            modifier = Modifier.padding(start = if (compact) 10.dp else 14.dp, end = 4.dp),
+            modifier = Modifier.padding(start = if (compact) 8.dp else 14.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(2.dp)
         ) {
@@ -107,7 +113,13 @@ fun LyricsControlBar(
 
             Text(
                 text = formatBias(bias),
-                modifier = Modifier.width(if (compact) 56.dp else 72.dp),
+                // 不写死宽度：系统字体放大后 "+100ms" 在固定 56dp 里会被挤成两行，
+                // 这里让它按内容排、只允许单行，整行宽度靠外层的自适应布局去兜底
+                modifier = Modifier
+                    .widthIn(min = if (compact) 48.dp else 64.dp)
+                    .padding(horizontal = if (compact) 4.dp else 8.dp),
+                maxLines = 1,
+                softWrap = false,
                 textAlign = TextAlign.Center,
                 style = MaterialTheme.typography.labelLarge
             )
@@ -131,16 +143,22 @@ fun LyricsControlBar(
             )
 
             if (compact) {
-                FilledTonalIconButton(
-                    onClick = onSave,
-                    enabled = isDirty,
-                    modifier = Modifier.size(40.dp)
+                // 窄栏只在有改动时才出现保存键：平时省下 40dp，给加减和数值留出放大字体的余量
+                AnimatedVisibility(
+                    visible = isDirty,
+                    enter = fadeIn() + expandHorizontally(expandFrom = Alignment.Start),
+                    exit = fadeOut() + shrinkHorizontally(shrinkTowards = Alignment.Start),
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = "保存歌词延时",
-                        modifier = Modifier.size(18.dp)
-                    )
+                    FilledTonalIconButton(
+                        onClick = onSave,
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = "保存歌词延时",
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             } else {
                 FilledTonalButton(
