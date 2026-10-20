@@ -39,7 +39,20 @@ class LyricsPageViewModel(
         scope.launch {
             audioPlayService.currentTrack
                 .filterNotNull()
-                .distinctUntilChangedBy { track -> track.id }
+                // 只比 id 会漏掉「同一首歌换元数据」：搜索页试听后编辑信息再加入歌单，
+                // 再从歌单播放时 id 没变，这次赋值会被丢掉，歌词页的歌名/歌手/封面就停在旧值上
+                // （播放条的同类问题就是这么修的，这里漏了）。
+                // 也不整条比 TrackInfo：它带着 lyricBias，保存歌词延时会产生一条「只有偏移不同」
+                // 的新值，整条比会让这里重复拉一次歌词、闪一次转圈；偏移的同步由下面那个
+                // songs 收集器单独负责。所以只比界面真正渲染的那几个字段。
+                .distinctUntilChangedBy { track ->
+                    TrackSnapshot(
+                        id = track.id,
+                        title = track.title,
+                        author = track.author,
+                        pic = track.pic
+                    )
+                }
                 .collect { track ->
                     loadLyricsInternal(track)
                 }
@@ -177,3 +190,15 @@ data class LyricsUiState(
         return draft != null && draft != savedLyricBias
     }
 }
+
+/**
+ * 歌词页会渲染的曲目字段快照，用来判断「换了一首歌」还是「同一首歌换了元数据」。
+ *
+ * 刻意不含 [TrackInfo.lyricBias]：那是延时的保存值，改动它不该让歌词重新拉一遍。
+ */
+private data class TrackSnapshot(
+    val id: String,
+    val title: String,
+    val author: String,
+    val pic: String,
+)
