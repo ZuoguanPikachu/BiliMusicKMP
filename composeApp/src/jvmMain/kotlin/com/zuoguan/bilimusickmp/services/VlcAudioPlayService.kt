@@ -147,6 +147,11 @@ class VlcAudioPlayService : AudioPlayService {
             AudioSource.NET_EASE -> arrayOf(
                 ":http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
             )
+
+            AudioSource.QQ_MUSIC -> arrayOf(
+                ":http-referrer=https://y.qq.com/",
+                ":http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            )
         }
 
         mediaPlayer.media().play(url, *options)

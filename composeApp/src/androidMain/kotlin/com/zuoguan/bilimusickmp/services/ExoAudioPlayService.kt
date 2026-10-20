@@ -190,6 +190,11 @@ class ExoAudioPlayService(
                 headers["User-Agent"] = "IPhone-8990-searchSong"
                 headers["UNI-UserAgent"] = "iOS11.4-Phone8990-1009-0-WiFi"
             }
+            AudioSource.QQ_MUSIC -> {
+                // QQ 音乐的直链不校验请求头，带上站点 Referer 只是为了和网页端一致
+                headers["Referer"] = "https://y.qq.com/"
+                headers["Origin"] = "https://y.qq.com"
+            }
         }
 
         // 每个媒体源都新建一个 Factory：Factory 上的 request properties 是可变共享状态，

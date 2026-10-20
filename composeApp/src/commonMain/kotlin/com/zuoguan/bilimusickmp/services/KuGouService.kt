@@ -4,6 +4,7 @@ import com.zuoguan.bilimusickmp.models.AudioSource
 import com.zuoguan.bilimusickmp.models.LyricLine
 import com.zuoguan.bilimusickmp.models.SearchResult
 import com.zuoguan.bilimusickmp.models.SearchResultPage
+import com.zuoguan.bilimusickmp.utils.parseLrc
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -316,34 +317,9 @@ class KuGouService {
     /**
      * 把 LRC 文本解析成按时间升序排列的歌词行。
      *
-     * 一行可能带多个时间戳（对唱、重复段落），会展开成多行；毫秒位为两位时按 ×10 补齐到毫秒。
-     * 只有时间戳没有文字的纯节奏行会被跳过。
+     * 解析规则见 [parseLrc]：多时间戳展开、毫秒位补零、纯节奏行跳过。
      */
-    fun parseLyrics(lrcContent: String): List<LyricLine> {
-        val result = mutableListOf<LyricLine>()
-        val regex = """\[(\d{2}):(\d{2}\.\d{2,3})]""".toRegex()
-
-        lrcContent.lines().forEach { line ->
-            val matches = regex.findAll(line).toList()
-            if (matches.isEmpty()) return@forEach
-
-            val text = line.replace(regex, "").trim()
-            if (text.isEmpty()) return@forEach
-
-            matches.forEach { match ->
-                val minutes = match.groupValues[1].toLongOrNull() ?: 0L
-                val secondsParts = match.groupValues[2].split(".")
-                val seconds = secondsParts.getOrNull(0)?.toLongOrNull() ?: 0L
-                val fraction = secondsParts.getOrNull(1)?.toLongOrNull() ?: 0L
-                val millis = if (secondsParts.getOrNull(1)?.length == 3) fraction else fraction * 10
-
-                val timeMs = minutes * 60_000 + seconds * 1_000 + millis
-                result.add(LyricLine(timeMs, text))
-            }
-        }
-
-        return result.sortedBy { it.timeMs }
-    }
+    fun parseLyrics(lrcContent: String): List<LyricLine> = parseLrc(lrcContent)
 
     private fun md5(text: String): String {
         val md = MessageDigest.getInstance("MD5")

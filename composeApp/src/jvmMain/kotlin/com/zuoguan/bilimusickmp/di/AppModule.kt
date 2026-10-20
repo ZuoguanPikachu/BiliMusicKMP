@@ -9,6 +9,7 @@ import com.zuoguan.bilimusickmp.services.JsonPreferencesStorageService
 import com.zuoguan.bilimusickmp.services.KuGouService
 import com.zuoguan.bilimusickmp.services.NetEaseService
 import com.zuoguan.bilimusickmp.services.PreferencesStorageService
+import com.zuoguan.bilimusickmp.services.QQMusicService
 import com.zuoguan.bilimusickmp.services.SongMetadataService
 import com.zuoguan.bilimusickmp.services.SongRepositoryService
 import com.zuoguan.bilimusickmp.services.UpdateCheckService
@@ -36,6 +37,7 @@ val appModule = module {
     single { BiliService() }
     single { NetEaseService() }
     single { KuGouService() }
+    single { QQMusicService() }
     single { JsEngineService(File(getAppConfigDir(), "cloud_sync_script.js")) }
     // 建存储前先跑一次旧配置迁移；无旧文件时直接返回
     single<PreferencesStorageService> {
@@ -45,15 +47,15 @@ val appModule = module {
     single { ExtractSongBaseInfoService(get()) }
     single<AudioPlayService> { VlcAudioPlayService() }
     single { SongRepositoryService() }
-    single { SongMetadataService(get(), get(), get(), get()) }
+    single { SongMetadataService(get(), get(), get(), get(), get()) }
     single { UpdateCheckService() }
     single(createdAtStart = true) { CloudSyncService(get(), get(), get()) }
     // 歌曲编辑会话：ViewModel 双平台共用，桌面侧由对话框承载
     single { SongEditorViewModel(get(), get()) }
 
-    single { SearchPageViewModel(get(), get(), get(), get()) }
+    single { SearchPageViewModel(get(), get(), get(), get(), get()) }
     single {
-        PlaylistPageViewModel(get(), get(), get(), get(), get())
+        PlaylistPageViewModel(get(), get(), get(), get(), get(), get())
     }
     single { PlayBarViewModel(get()) }
     single { LyricsPageViewModel(get(), get()) }

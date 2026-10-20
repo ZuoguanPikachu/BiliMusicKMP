@@ -24,7 +24,7 @@ data class SearchResult(
  *
  * - B 站：搜索结果里只有原始投稿标题与视频信息，歌词/封面来源留空，
  *   由 [com.zuoguan.bilimusickmp.vm.SongEditorViewModel.openForCreate] 再做补全；
- * - 网易云 / 酷狗：搜索结果本身就是歌曲，`id` 可直接作为歌词 ID 与封面 ID，
+ * - 网易云 / 酷狗 / QQ 音乐：搜索结果本身就是歌曲，`id` 可直接作为歌词 ID 与封面 ID，
  *   封面 URL 也能直接复用。
  */
 fun SearchResult.toSong(): Song = Song(
@@ -36,12 +36,14 @@ fun SearchResult.toSong(): Song = Song(
         AudioSource.BILI_BILI -> LyricSource.NONE
         AudioSource.KU_GOU -> LyricSource.KU_GOU
         AudioSource.NET_EASE -> LyricSource.NET_EASE
+        AudioSource.QQ_MUSIC -> LyricSource.QQ_MUSIC
     },
     lyricId = if (audioSource == AudioSource.BILI_BILI) "" else id,
     coverSource = when (audioSource) {
         AudioSource.BILI_BILI -> CoverSource.BILI_BILI
         AudioSource.KU_GOU -> CoverSource.KU_GOU
         AudioSource.NET_EASE -> CoverSource.NET_EASE
+        AudioSource.QQ_MUSIC -> CoverSource.QQ_MUSIC
     },
     coverId = if (audioSource == AudioSource.BILI_BILI) "" else id,
     pic = pic,

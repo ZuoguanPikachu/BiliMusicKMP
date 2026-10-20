@@ -12,6 +12,7 @@ import com.zuoguan.bilimusickmp.models.LyricLine
 import com.zuoguan.bilimusickmp.models.SearchResult
 import com.zuoguan.bilimusickmp.models.SearchResultPage
 import com.zuoguan.bilimusickmp.utils.NoRetryException
+import com.zuoguan.bilimusickmp.utils.parseLrc
 import com.zuoguan.bilimusickmp.utils.retry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -353,39 +354,7 @@ class NetEaseService {
             val lrc = (json["lrc"] as? Map<*, *>) ?: return@retry emptyList()
             val lyric = lrc["lyric"] as? String ?: return@retry emptyList()
 
-            val result = mutableListOf<LyricLine>()
-
-            val lines = lyric.split("\n")
-            val timeRegex = Regex("""\[(\d{2}):(\d{2})\.(\d{2,3})]""")
-
-            for (line in lines) {
-                val matches = timeRegex.findAll(line).toList()
-                if (matches.isEmpty()) continue
-
-                val text = line.replace(timeRegex, "").trim()
-                if (text.isEmpty()) continue
-
-                for (match in matches) {
-                    val minutes = match.groupValues[1].toInt()
-                    val seconds = match.groupValues[2].toInt()
-                    val milliStr = match.groupValues[3]
-
-                    val milliseconds = if (milliStr.length == 2) {
-                        milliStr.toInt() * 10
-                    } else {
-                        milliStr.toInt()
-                    }
-
-                    val timeMs =
-                        minutes * 60_000L +
-                                seconds * 1_000L +
-                                milliseconds
-
-                    result.add(LyricLine(timeMs, text))
-                }
-            }
-
-            return@retry result.sortedBy { it.timeMs }
+            return@retry parseLrc(lyric)
         }
     }
 

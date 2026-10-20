@@ -12,6 +12,7 @@ import com.zuoguan.bilimusickmp.services.AudioPlayService
 import com.zuoguan.bilimusickmp.services.BiliService
 import com.zuoguan.bilimusickmp.services.KuGouService
 import com.zuoguan.bilimusickmp.services.NetEaseService
+import com.zuoguan.bilimusickmp.services.QQMusicService
 import com.zuoguan.bilimusickmp.services.SongRepositoryService
 import com.zuoguan.bilimusickmp.utils.UiEvent
 import kotlinx.coroutines.CancellationException
@@ -39,7 +40,8 @@ class PlaylistPageViewModel(
     private val audioPlayService: AudioPlayService,
     private val biliService: BiliService,
     private val netEaseService: NetEaseService,
-    private val kuGouService: KuGouService
+    private val kuGouService: KuGouService,
+    private val qqMusicService: QQMusicService
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     /** 列表滚动状态；放在 VM 里是为了让滚动位置跨重组保留。 */
@@ -163,11 +165,13 @@ class PlaylistPageViewModel(
         AudioSource.BILI_BILI -> biliService.getAudioUrl(id, cid)
         AudioSource.NET_EASE -> netEaseService.getAudioUrl(id)
         AudioSource.KU_GOU -> kuGouService.getAudioUrl(id)
+        AudioSource.QQ_MUSIC -> qqMusicService.getAudioUrl(id)
     }
 
     private suspend fun Song.resolveLyrics(): List<LyricLine> = when (lyricSource) {
         LyricSource.KU_GOU -> kuGouService.getLyric(lyricId)
         LyricSource.NET_EASE -> netEaseService.getLyric(lyricId)
+        LyricSource.QQ_MUSIC -> qqMusicService.getLyric(lyricId)
         LyricSource.NONE -> emptyList()
     }
 

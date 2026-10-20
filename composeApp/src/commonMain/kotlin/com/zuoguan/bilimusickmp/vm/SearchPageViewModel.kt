@@ -11,6 +11,7 @@ import com.zuoguan.bilimusickmp.services.AudioPlayService
 import com.zuoguan.bilimusickmp.services.BiliService
 import com.zuoguan.bilimusickmp.services.KuGouService
 import com.zuoguan.bilimusickmp.services.NetEaseService
+import com.zuoguan.bilimusickmp.services.QQMusicService
 import com.zuoguan.bilimusickmp.utils.UiEvent
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -25,7 +26,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/** 每页请求的结果条数：B 站是页码分页，网易云/酷狗按它换算偏移与页码。 */
+/** 每页请求的结果条数：B 站是页码分页，网易云按它换算偏移，酷狗/QQ 音乐直接按它翻页。 */
 private const val PAGE_SIZE = 20
 
 /**
@@ -38,6 +39,7 @@ class SearchPageViewModel(
     private val netEaseService: NetEaseService,
     private val audioPlayService: AudioPlayService,
     private val kuGouService: KuGouService,
+    private val qqMusicService: QQMusicService,
 ) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -144,6 +146,9 @@ class SearchPageViewModel(
 
                 AudioSource.KU_GOU ->
                     kuGouService.search(keyword, pageSize = PAGE_SIZE, page = page)
+
+                AudioSource.QQ_MUSIC ->
+                    qqMusicService.search(keyword, pageSize = PAGE_SIZE, page = page)
             }
             val result = pageResult.items
 
@@ -215,6 +220,10 @@ class SearchPageViewModel(
                     AudioSource.KU_GOU -> {
                         kuGouService.getAudioUrl(item.id)
                     }
+
+                    AudioSource.QQ_MUSIC -> {
+                        qqMusicService.getAudioUrl(item.id)
+                    }
                 }
             },
             lyricsProvider = {
@@ -228,6 +237,10 @@ class SearchPageViewModel(
 
                     AudioSource.KU_GOU -> {
                         kuGouService.getLyric(item.id)
+                    }
+
+                    AudioSource.QQ_MUSIC -> {
+                        qqMusicService.getLyric(item.id)
                     }
                 }
             },
