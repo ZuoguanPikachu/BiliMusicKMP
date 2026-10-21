@@ -46,6 +46,9 @@ class QQMusicVipOnlyException(message: String) : QQMusicException(message)
  * - 封面 `y.gtimg.cn/music/photo_new/...`，纯 URL 模板，不发请求；
  * - 歌词 `c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg`，必须带 Referer；
  * - 直链 `u.y.qq.com/cgi-bin/musicu.fcg` 的 `CgiGetVkey`，返回短时效 vkey 拼出的地址。
+ *
+ * 对外暴露的歌曲 id 有两种形状：新曲目是真正的 `songmid`；老目录条目只有数字 `songid`，
+ * 用 `id:{songid}` 标记，取歌词/直链时再按需换成 mid（详见 [LEGACY_ID_PREFIX]）。
  */
 class QQMusicService {
     private val client = OkHttpClient.Builder()
@@ -66,6 +69,8 @@ class QQMusicService {
     private val albumCache = ConcurrentHashMap<String, String>()
     // songmid -> mediaMid：拼直链文件名用，必须来自详情接口
     private val mediaCache = ConcurrentHashMap<String, String>()
+    // 对外 id -> 真 songmid：只对老目录条目（id:{songid}）有值
+    private val midCache = ConcurrentHashMap<String, String>()
     // songmid -> 详情响应，避免同一首歌反复请求
     private val detailCache = ConcurrentHashMap<String, JsonObject>()
 
@@ -175,14 +180,32 @@ class QQMusicService {
         return SearchResultPage(items, hasMore)
     }
 
-    /** 把搜索接口里的一条扁平记录转成 [SearchResult]；缺 songmid 的条目直接丢弃。 */
-    private fun parseSearchItem(element: JsonElement): SearchResult? {
+    /**
+     * 把搜索接口里的一条扁平记录转成 [SearchResult]。
+     *
+     * 搜索接口会混着返回两种 schema：新曲目带真正的 `songmid` / `albummid`；老目录条目这两
+     * 个字段都是占位值（`"songmid":"0"`、`"albummid":"0"` 或纯数字 album id），唯一能用的
+     * 标识是数字 `songid`。这类条目用 [LEGACY_ID_PREFIX] 标记后仍然收下（真的丢掉的话，
+     * 像「愿逐月华照君明」这种命中一堆老歌的关键词会只剩几条结果），播放时再按需换成 mid。
+     *
+     * @return 两种标识都没有的条目返回 null（无法唯一定位，且 id 会撞车）。
+     *
+     * 纯函数（不发请求），声明为 internal 只是为了让本地用例能直接喂两种 schema 的响应。
+     */
+    internal fun parseSearchItem(element: JsonElement): SearchResult? {
         val song = element as? JsonObject ?: return null
-        // 歌词与直链接口都认 songmid，因此搜索结果的 id 就取 songmid
-        val songMid = song["songmid"]?.jsonPrimitive?.contentOrNull ?: return null
 
+        val songMid = song["songmid"]?.jsonPrimitive?.contentOrNull.orEmpty()
+        val songId = song["songid"]?.jsonPrimitive?.contentOrNull.orEmpty()
+        val id = when {
+            isRealMid(songMid) -> songMid
+            isRealSongId(songId) -> LEGACY_ID_PREFIX + songId
+            else -> return null
+        }
+
+        // 老条目的 albummid 是数字 album id，拼出来的封面是 404，只能当作"没有封面"
         val albumMid = song["albummid"]?.jsonPrimitive?.contentOrNull.orEmpty()
-        if (albumMid.isNotEmpty()) albumCache[songMid] = albumMid
+        if (isRealMid(albumMid)) albumCache[id] = albumMid
 
         val interval = song["interval"]?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: 0
         val singers = (song["singer"] as? JsonArray)
@@ -190,10 +213,10 @@ class QQMusicService {
             .orEmpty()
 
         return SearchResult(
-            id = songMid,
+            id = id,
             title = song["songname"]?.jsonPrimitive?.contentOrNull.orEmpty(),
             author = singers.joinToString(" "),
-            pic = getCoverUrl(albumMid),
+            pic = getCoverUrl(albumMid.takeIf { isRealMid(it) } ?: ""),
             duration = formatDuration(interval),
             audioSource = AudioSource.QQ_MUSIC
         )
@@ -227,21 +250,23 @@ class QQMusicService {
         if (albumMid.isEmpty()) "" else COVER_TEMPLATE.format(size, size, albumMid)
 
     /**
-     * 取某首歌的详情（匿名可用）。主要用途是从 songmid 反查 albumMid 与 mediaMid。
+     * 取某首歌的详情（匿名可用）。主要用途是从歌曲 id 反查 songmid / albumMid / mediaMid。
      *
+     * 同时接受真 mid 与老条目的 `id:{songid}` 形式，由 [detailParams] 决定用哪个参数名。
      * 搜索阶段已经缓存了 albumMid，正常取封面用不到这个接口；
      * 但**取直链必须要 mediaMid**，所以播放时一定会走一次。
      *
      * @return 接口没有该曲目时返回 null。
      */
-    private suspend fun getSongDetail(songMid: String): JsonObject? {
-        detailCache[songMid]?.let { return it }
+    private suspend fun getSongDetail(id: String): JsonObject? {
+        detailCache[id]?.let { return it }
 
+        val (keyName, keyValue) = detailParams(id)
         val url = HttpUrl.Builder()
             .scheme("https")
             .host("c.y.qq.com")
             .addPathSegments("v8/fcg-bin/fcg_play_single_song.fcg")
-            .addQueryParameter("songmid", songMid)
+            .addQueryParameter(keyName, keyValue)
             .addQueryParameter("platform", "yqq")
             .addQueryParameter("format", "json")
             .build()
@@ -250,14 +275,55 @@ class QQMusicService {
             ?: return null
 
         ((detail["album"] as? JsonObject)?.get("mid")?.jsonPrimitive?.contentOrNull)
-            ?.takeIf { it.isNotEmpty() }
-            ?.let { albumCache[songMid] = it }
+            ?.takeIf { isRealMid(it) }
+            ?.let { albumCache[id] = it }
         ((detail["file"] as? JsonObject)?.get("media_mid")?.jsonPrimitive?.contentOrNull)
-            ?.takeIf { it.isNotEmpty() }
-            ?.let { mediaCache[songMid] = it }
+            ?.takeIf { isRealMid(it) }
+            ?.let { mediaCache[id] = it }
+        // 老条目在这里才能换到真 mid，顺手缓存，省掉重复的详情请求
+        detail["mid"]?.jsonPrimitive?.contentOrNull
+            ?.takeIf { isRealMid(it) }
+            ?.let { midCache[id] = it }
 
-        detailCache[songMid] = detail
+        detailCache[id] = detail
         return detail
+    }
+
+    /**
+     * 把对外的歌曲 id 拆成详情接口需要的参数。
+     *
+     * 真 mid 走 `songmid`；老目录条目只有数字 `songid`，详情接口用 `songid` 查也能返回
+     * 完整记录（含真 mid），所以这两种形状都能定位到同一首歌。
+     */
+    private fun detailParams(id: String): Pair<String, String> =
+        if (id.startsWith(LEGACY_ID_PREFIX)) {
+            "songid" to id.removePrefix(LEGACY_ID_PREFIX)
+        } else {
+            "songmid" to id
+        }
+
+    /**
+     * 把对外的歌曲 id 换成接口真正要的 songmid。
+     *
+     * 真 mid 原样返回；`id:{songid}` 先查一次详情换回 mid —— 直链与歌词接口都不认数字
+     * songid（实测 result=101404 / retcode=1101），必须先换。
+     *
+     * @throws QQMusicException 换不到 mid 时（详情接口没有返回或该曲目已下架）。
+     */
+    private suspend fun resolveSongMid(id: String): String {
+        if (!id.startsWith(LEGACY_ID_PREFIX)) return id
+
+        midCache[id]?.let { return it }
+
+        val mid = getSongDetail(id)
+            ?.let { it["mid"]?.jsonPrimitive?.contentOrNull ?: it["songmid"]?.jsonPrimitive?.contentOrNull }
+            .orEmpty()
+        if (!isRealMid(mid)) {
+            throw QQMusicException("获取音频链接错误：歌曲 ${id.removePrefix(LEGACY_ID_PREFIX)} 已无有效 mid")
+        }
+
+        midCache[id] = mid
+        return mid
     }
 
     /**
@@ -266,24 +332,25 @@ class QQMusicService {
      * 文件名形如 `M500{mediaMid}.mp3`，这里的 mediaMid 常常和 songmid 不同。用 songmid 拼时
      * 服务端照样回 `result=0` 和非空 purl，只有真正下载才会 404，所以一律以详情接口为准。
      */
-    private suspend fun getMediaMid(songMid: String): String {
-        mediaCache[songMid]?.let { return it }
-        getSongDetail(songMid)
-        return mediaCache[songMid].orEmpty()
+    private suspend fun getMediaMid(id: String): String {
+        mediaCache[id]?.let { return it }
+        getSongDetail(id)
+        return mediaCache[id].orEmpty()
     }
 
     /**
-     * 对齐酷狗的 `getImageUrl(id)`：只给 songmid 也能拿到封面。
+     * 对齐酷狗的 `getImageUrl(id)`：只给歌曲 id 也能拿到封面。
      *
-     * 优先用搜索阶段缓存的 albumMid，没有缓存才回落到详情接口反查。
+     * 优先用搜索阶段缓存的 albumMid，没有缓存才回落到详情接口反查 ——
+     * 老条目的 albumMid 在搜索里是无效占位值，只能靠详情接口给。
      *
      * @return 拿不到 albumMid 时返回空串（界面按无封面处理）。
      */
     suspend fun getImageUrl(id: String): String {
-        val albumMid = albumCache[id]?.takeIf { it.isNotEmpty() }
+        val albumMid = albumCache[id]?.takeIf { isRealMid(it) }
             ?: getSongDetail(id)?.let { (it["album"] as? JsonObject) }
                 ?.get("mid")?.jsonPrimitive?.contentOrNull.orEmpty()
-        return getCoverUrl(albumMid)
+        return getCoverUrl(albumMid.takeIf { isRealMid(it) } ?: "")
     }
 
     // ---------------------------------------------------------------- 音频直链
@@ -340,6 +407,9 @@ class QQMusicService {
      * @throws QQMusicException 接口异常，或所有档位都拿不到可下载的地址。
      */
     suspend fun getAudioUrl(id: String): String {
+        // 老条目要先拿数字 songid 换回真 mid，vkey 接口不认 songid
+        val songMid = resolveSongMid(id)
+
         // 详情接口失败不致命：下面还有"不传 filename"的服务端默认档位兜底
         val mediaMid = try {
             getMediaMid(id)
@@ -362,7 +432,7 @@ class QQMusicService {
         val rejected = mutableListOf<String>()
 
         for (fileName in candidates) {
-            val (sips, infos) = requestVkey(id, fileName)
+            val (sips, infos) = requestVkey(songMid, fileName)
             val info = infos.firstOrNull() ?: continue
             lastResult = info["result"]?.jsonPrimitive?.contentOrNull?.toIntOrNull()
 
@@ -421,11 +491,14 @@ class QQMusicService {
      * @return 没有歌词时返回空列表（纯音乐/钢琴曲属于正常情况）。
      */
     suspend fun getLyric(id: String): List<LyricLine> {
+        // 老条目要先换回真 mid：歌词接口只认 songmid（传 songid 返回 retcode=1101）
+        val songMid = resolveSongMid(id)
+
         val url = HttpUrl.Builder()
             .scheme("https")
             .host("c.y.qq.com")
             .addPathSegments("lyric/fcgi-bin/fcg_query_lyric_new.fcg")
-            .addQueryParameter("songmid", id)
+            .addQueryParameter("songmid", songMid)
             .addQueryParameter("format", "json")
             .addQueryParameter("nobase64", "1")
             .addQueryParameter("g_tk", "5381")
@@ -448,6 +521,35 @@ class QQMusicService {
         "%02d:%02d".format(seconds / 60, seconds % 60)
 
     private companion object {
+        /**
+         * 老目录条目的 id 前缀：这类条目搜索时不给 `songmid`，只有数字 `songid`。
+         *
+         * 数字 songid 不能直接当 id 用 —— 直链与歌词接口都不认它，而且一批老条目会同时
+         * 都是 `"0"`，在列表里撞成重复主键（Compose 的 LazyLayout 会直接抛
+         * `Key "0" was already used`）。所以用前缀标出来，用到时再换真 mid。
+         */
+        const val LEGACY_ID_PREFIX = "id:"
+
+        /** mid 缺失时服务端给的占位值，和空串一样不能用。 */
+        const val PLACEHOLDER_ID = "0"
+
+        /** 占位值：空串或 "0"。 */
+        fun isPlaceholder(value: String): Boolean =
+            value.isEmpty() || value == PLACEHOLDER_ID
+
+        /**
+         * 真的 mid（songmid / albummid）。
+         *
+         * 真 mid 是 14 位 base62 串；老目录条目里对应位置填的是纯数字的内部 id
+         * （`"songmid":"0"`、`"albummid":"27320831"`），拿它拼封面只会 404，所以一起排除。
+         */
+        fun isRealMid(value: String): Boolean =
+            !isPlaceholder(value) && !value.all { it.isDigit() }
+
+        /** 真的数字 songid：非空、非占位值、且确实是数字。 */
+        fun isRealSongId(value: String): Boolean =
+            !isPlaceholder(value) && value.all { it.isDigit() }
+
         /** musicu 网关：直链接口就在这里。 */
         const val MUSICU_API = "https://u.y.qq.com/cgi-bin/musicu.fcg"
 

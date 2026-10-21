@@ -157,7 +157,9 @@ class SearchPageViewModel(
                     // 分页接口偶尔会重复返回上一条，按 id 去重避免界面出现重复项
                     (current.results + result).distinctBy { it.id }
                 } else {
-                    result
+                    // 首屏也要去重：列表是按 id 做 key 的，出现重复主键时 LazyLayout 会直接抛
+                    // "Key ... was already used" 把整页打崩，接口返回什么都要先自己兜住
+                    result.distinctBy { it.id }
                 }
 
                 current.copy(
