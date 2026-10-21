@@ -1,6 +1,7 @@
 package com.zuoguan.bilimusickmp.vm
 
 import com.zuoguan.bilimusickmp.models.LyricLine
+import com.zuoguan.bilimusickmp.models.LyricSource
 import com.zuoguan.bilimusickmp.models.PlaybackState
 import com.zuoguan.bilimusickmp.models.TrackInfo
 import com.zuoguan.bilimusickmp.services.AudioPlayService
@@ -44,13 +45,17 @@ class LyricsPageViewModel(
                 // （播放条的同类问题就是这么修的，这里漏了）。
                 // 也不整条比 TrackInfo：它带着 lyricBias，保存歌词延时会产生一条「只有偏移不同」
                 // 的新值，整条比会让这里重复拉一次歌词、闪一次转圈；偏移的同步由下面那个
-                // songs 收集器单独负责。所以只比界面真正渲染的那几个字段。
+                // songs 收集器单独负责。所以只比界面真正渲染的字段 + 歌词身份。
+                // 歌词身份（lyricSource/lyricId）不能省：只换歌词源时歌名封面都没动，
+                // 少了它就当作「没变」，歌词会一直停在旧来源上。
                 .distinctUntilChangedBy { track ->
                     TrackSnapshot(
                         id = track.id,
                         title = track.title,
                         author = track.author,
-                        pic = track.pic
+                        pic = track.pic,
+                        lyricSource = track.lyricSource,
+                        lyricId = track.lyricId
                     )
                 }
                 .collect { track ->
@@ -192,13 +197,17 @@ data class LyricsUiState(
 }
 
 /**
- * 歌词页会渲染的曲目字段快照，用来判断「换了一首歌」还是「同一首歌换了元数据」。
+ * 判断「要不要重新拉歌词」的快照：界面展示字段 + 歌词身份。
  *
- * 刻意不含 [TrackInfo.lyricBias]：那是延时的保存值，改动它不该让歌词重新拉一遍。
+ * - 带上 [lyricSource]/[lyricId]：歌词源一换（哪怕歌名、封面都没动）就得重拉，
+ *   这两个字段同时也是 [TrackInfo.equals] 的一部分，否则变更根本不会外发到这里。
+ * - 刻意不含 [TrackInfo.lyricBias]：那是延时的保存值，改动它不该让歌词重新拉一遍。
  */
 private data class TrackSnapshot(
     val id: String,
     val title: String,
     val author: String,
     val pic: String,
+    val lyricSource: LyricSource,
+    val lyricId: String,
 )

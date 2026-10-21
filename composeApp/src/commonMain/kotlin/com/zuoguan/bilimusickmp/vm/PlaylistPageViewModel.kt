@@ -157,6 +157,8 @@ class PlaylistPageViewModel(
         playSource = PlaySource.PLAYLIST,
         pic = pic,
         urlProvider = { resolveAudioUrl() },
+        lyricSource = lyricSource,
+        lyricId = lyricId,
         lyricBias = lyricBias,
         lyricsProvider = { resolveLyrics() },
     )

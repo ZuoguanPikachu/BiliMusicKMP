@@ -7,6 +7,8 @@ import com.zuoguan.bilimusickmp.models.AudioSource
 import com.zuoguan.bilimusickmp.models.PlaySource
 import com.zuoguan.bilimusickmp.models.SearchResult
 import com.zuoguan.bilimusickmp.models.TrackInfo
+import com.zuoguan.bilimusickmp.models.lyricId
+import com.zuoguan.bilimusickmp.models.lyricSource
 import com.zuoguan.bilimusickmp.services.AudioPlayService
 import com.zuoguan.bilimusickmp.services.BiliService
 import com.zuoguan.bilimusickmp.services.KuGouService
@@ -228,6 +230,9 @@ class SearchPageViewModel(
                     }
                 }
             },
+            // 歌词身份要和下面的 lyricsProvider 对得上，否则只换歌词源时变更不会外发
+            lyricSource = item.lyricSource,
+            lyricId = item.lyricId,
             lyricsProvider = {
                 when (item.audioSource) {
                     // B 站搜索结果没有歌词 ID，播放时先不带歌词
