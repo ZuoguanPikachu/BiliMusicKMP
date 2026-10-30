@@ -7,12 +7,14 @@ import com.zuoguan.bilimusickmp.services.ExtractSongBaseInfoService
 import com.zuoguan.bilimusickmp.services.JsEngineService
 import com.zuoguan.bilimusickmp.services.LlmConnectionResult
 import com.zuoguan.bilimusickmp.services.PreferencesStorageService
+import com.zuoguan.bilimusickmp.services.SongCacheService
 import com.zuoguan.bilimusickmp.services.SyncUiState
 import com.zuoguan.bilimusickmp.services.UpdateCheckResult
 import com.zuoguan.bilimusickmp.services.UpdateCheckService
 import com.zuoguan.bilimusickmp.services.getLLMConfig
 import com.zuoguan.bilimusickmp.services.saveLLMConfig
 import com.zuoguan.bilimusickmp.utils.UiEvent
+import com.zuoguan.bilimusickmp.utils.formatBytes
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -27,16 +29,18 @@ import kotlinx.coroutines.launch
 /**
  * 设置页状态。
  *
- * 汇集 LLM 配置、云同步脚本与同步状态，并把编辑结果写回各自的存储服务。
+ * 汇集 LLM 配置、云同步脚本、同步状态与缓存开关，并把编辑结果写回各自的存储服务。
  * 主题色由 [ThemeViewModel] 单独管理（需要预览/确认两层状态）；
  * 检查更新由用户手动触发，结果只留在内存里。
+ * 缓存 / 下载的两个开关只写本机偏好，不参与云同步。
  */
 class SettingsPageViewModel(
     private val preferencesStorageService: PreferencesStorageService,
     private val jsEngineService: JsEngineService,
     private val cloudSyncService: CloudSyncService,
     private val updateCheckService: UpdateCheckService,
-    private val extractSongBaseInfoService: ExtractSongBaseInfoService
+    private val extractSongBaseInfoService: ExtractSongBaseInfoService,
+    private val songCacheService: SongCacheService
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -73,6 +77,37 @@ class SettingsPageViewModel(
         scope.launch {
             cloudSyncService.status.collect { status ->
                 _uiState.update { it.copy(syncStatus = status) }
+            }
+        }
+        observeCache()
+    }
+
+    /**
+     * 缓存开关与缓存占用的状态。
+     *
+     * 两个开关只存在本机（键名以 `local.` 开头），不会随云同步跑到别的设备上：
+     * 是否缓存取决于各自的存储与流量情况。下载到音乐目录属于系统音乐库的事，
+     * 设置页不管它。
+     */
+    private fun observeCache() {
+        scope.launch {
+            songCacheService.enabled.collect { enabled ->
+                _uiState.update { it.copy(cache = it.cache.copy(enabled = enabled)) }
+            }
+        }
+        scope.launch {
+            songCacheService.wifiOnly.collect { wifiOnly ->
+                _uiState.update { it.copy(cache = it.cache.copy(wifiOnly = wifiOnly)) }
+            }
+        }
+        scope.launch {
+            songCacheService.cacheSizeBytes.collect { size ->
+                _uiState.update { it.copy(cache = it.cache.copy(cacheSizeBytes = size)) }
+            }
+        }
+        scope.launch {
+            songCacheService.cachingIds.collect { ids ->
+                _uiState.update { it.copy(cache = it.cache.copy(activeTransferCount = ids.size)) }
             }
         }
     }
@@ -144,6 +179,34 @@ class SettingsPageViewModel(
         }
     }
 
+    /** 开关「播放时自动缓存」。改动立刻落盘，不需要点保存。 */
+    fun setCacheEnabled(enabled: Boolean) {
+        scope.launch {
+            songCacheService.setEnabled(enabled)
+        }
+    }
+
+    /** 开关「仅在 Wi-Fi 下自动缓存」。 */
+    fun setCacheWifiOnly(wifiOnly: Boolean) {
+        scope.launch {
+            songCacheService.setWifiOnly(wifiOnly)
+        }
+    }
+
+    /** 清空缓存目录，结果用 Snackbar 反馈。 */
+    fun clearCache() {
+        scope.launch {
+            try {
+                val freed = songCacheService.clearCache()
+                _uiEvents.send(UiEvent.ShowSnackBar("已清理缓存，释放 ${formatBytes(freed)}"))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiEvents.send(UiEvent.ShowSnackBar("清理缓存失败：${e.message ?: "未知错误"}"))
+            }
+        }
+    }
+
     /**
      * 检查 GitHub Release 是否有新版本。
      *
@@ -173,7 +236,23 @@ data class SettingsUiState(
     /** 脚本最近一次求值失败的原因；null 表示当前脚本可用。 */
     val scriptError: String? = null,
     val syncStatus: SyncUiState = SyncUiState(),
-    val updateCheck: UpdateCheckState = UpdateCheckState()
+    val updateCheck: UpdateCheckState = UpdateCheckState(),
+    val cache: CacheUiState = CacheUiState()
+)
+
+/**
+ * 缓存区块的状态。下载到音乐目录不归设置页管，因此这里只有缓存相关字段。
+ *
+ * @property enabled 是否在播放时自动缓存。
+ * @property wifiOnly 是否只在 Wi-Fi 下自动缓存。
+ * @property cacheSizeBytes 缓存目录占用字节数。
+ * @property activeTransferCount 正在后台缓存的歌曲数。
+ */
+data class CacheUiState(
+    val enabled: Boolean = false,
+    val wifiOnly: Boolean = true,
+    val cacheSizeBytes: Long = 0L,
+    val activeTransferCount: Int = 0
 )
 
 /**

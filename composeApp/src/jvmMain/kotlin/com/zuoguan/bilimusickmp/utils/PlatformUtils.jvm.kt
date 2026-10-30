@@ -55,5 +55,8 @@ internal actual fun writeTextFileAtomic(path: String, content: String) {
 /** 当前时间戳，毫秒。 */
 internal actual fun currentTimeMillis(): Long = System.currentTimeMillis()
 
+/** VLC 直接接受本地路径（MRL），原样返回即可。 */
+internal actual fun localMediaLocation(path: String): String = path
+
 /** 桌面端不是移动端界面。 */
 internal actual val isMobileUi: Boolean = false

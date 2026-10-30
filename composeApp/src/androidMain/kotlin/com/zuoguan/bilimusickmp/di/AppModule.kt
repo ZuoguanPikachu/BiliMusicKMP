@@ -1,5 +1,6 @@
 package com.zuoguan.bilimusickmp.di
 
+import com.zuoguan.bilimusickmp.services.AndroidMusicLibraryWriter
 import com.zuoguan.bilimusickmp.services.AudioPlayService
 import com.zuoguan.bilimusickmp.services.BiliService
 import com.zuoguan.bilimusickmp.services.CloudSyncService
@@ -8,13 +9,17 @@ import com.zuoguan.bilimusickmp.services.ExtractSongBaseInfoService
 import com.zuoguan.bilimusickmp.services.JsEngineService
 import com.zuoguan.bilimusickmp.services.JsonPreferencesStorageService
 import com.zuoguan.bilimusickmp.services.KuGouService
+import com.zuoguan.bilimusickmp.services.MusicLibraryWriter
 import com.zuoguan.bilimusickmp.services.NavigationService
 import com.zuoguan.bilimusickmp.services.NetEaseService
 import com.zuoguan.bilimusickmp.services.PreferencesStorageService
 import com.zuoguan.bilimusickmp.services.QQMusicService
+import com.zuoguan.bilimusickmp.services.SongCacheService
+import com.zuoguan.bilimusickmp.services.SongDownloadService
 import com.zuoguan.bilimusickmp.services.SongMetadataService
 import com.zuoguan.bilimusickmp.services.SongRepositoryService
 import com.zuoguan.bilimusickmp.services.UpdateCheckService
+import com.zuoguan.bilimusickmp.utils.isWifiConnected
 import com.zuoguan.bilimusickmp.vm.LyricsPageViewModel
 import com.zuoguan.bilimusickmp.vm.PlayBarViewModel
 import com.zuoguan.bilimusickmp.vm.PlaylistPageViewModel
@@ -38,6 +43,17 @@ val appModule = module {
     single { ExtractSongBaseInfoService(get()) }
     single { SongRepositoryService() }
 
+    // 缓存落在 cacheDir（系统可回收，应用自己管）；下载则写进系统音乐库，见 SongDownloadService
+    single {
+        SongCacheService(
+            preferences = get(),
+            cacheDirectory = File(androidContext().cacheDir, "song_cache").absolutePath,
+            isWifiConnected = { isWifiConnected(androidContext()) }
+        )
+    }
+    single<MusicLibraryWriter> { AndroidMusicLibraryWriter(androidContext()) }
+    single { SongDownloadService(get()) }
+
     single<AudioPlayService> {
         ExoAudioPlayService(androidContext())
     }
@@ -49,9 +65,9 @@ val appModule = module {
     // 歌曲编辑会话：双平台共用同一 ViewModel，Android 侧用整页承载表单
     single { SongEditorViewModel(get(), get()) }
 
-    single { PlaylistPageViewModel(get(), get(), get(), get(), get(), get()) }
-    single { SearchPageViewModel(get(), get(), get(), get(), get()) }
-    single { SettingsPageViewModel(get(), get(), get(), get(), get()) }
+    single { PlaylistPageViewModel(get(), get(), get(), get(), get(), get(), get(), get()) }
+    single { SearchPageViewModel(get(), get(), get(), get(), get(), get()) }
+    single { SettingsPageViewModel(get(), get(), get(), get(), get(), get()) }
     // 主题色由根组件订阅，与设置页共用同一份偏好
     single { ThemeViewModel(get()) }
     single { PlayBarViewModel(get()) }

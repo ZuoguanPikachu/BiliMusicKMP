@@ -176,6 +176,15 @@ fun SettingsPage(
             )
         }
 
+        SettingsSection(title = "缓存") {
+            CacheSettingsSection(
+                state = state.cache,
+                onEnabledChange = { viewModel.setCacheEnabled(it) },
+                onWifiOnlyChange = { viewModel.setCacheWifiOnly(it) },
+                onClearCache = { viewModel.clearCache() }
+            )
+        }
+
         SettingsSection(title = "关于") {
             AboutSection(
                 state = state.updateCheck,

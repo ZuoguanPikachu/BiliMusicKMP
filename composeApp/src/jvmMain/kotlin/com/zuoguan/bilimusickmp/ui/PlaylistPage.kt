@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
@@ -86,7 +87,9 @@ fun PlaylistPage(
                         ),
                         song = it,
                         isPlaying = (it.id == state.currentTrack?.id && state.currentTrack?.playSource == PlaySource.PLAYLIST),
+                        isDownloading = it.id in state.downloadingIds,
                         playSong = viewModel::playSong,
+                        onDownload = viewModel::downloadSong,
                         requestDelete = viewModel::requestDelete,
                         requestEdit = songEditorViewModel::openForEdit
                     )
@@ -118,17 +121,21 @@ fun PlaylistPage(
 }
 
 /**
- * 单曲卡片：封面、标题与作者，右侧是删除和更多操作按钮。
+ * 单曲卡片：封面、标题与作者，右侧依次是删除、下载与更多操作按钮。
  *
  * @param isPlaying 当前曲目且来自歌单时高亮标题与底色。
+ * @param isDownloading 正在下载到音乐目录，下载按钮换成 loading 并禁用。
  * @param playSong 点击卡片播放该歌曲。
+ * @param onDownload 下载到系统音乐目录。
  */
 @Composable
 fun SongItem(
     modifier: Modifier = Modifier,
     song: Song,
     isPlaying: Boolean,
+    isDownloading: Boolean,
     playSong: (Song) -> Unit,
+    onDownload: (Song) -> Unit,
     requestDelete: (Song) -> Unit,
     requestEdit: (Song) -> Unit
 ) {
@@ -190,6 +197,21 @@ fun SongItem(
                     contentDescription = "Delete",
                     tint = MaterialTheme.colorScheme.error
                 )
+            }
+
+            IconButton(onClick = { onDownload(song) }, enabled = !isDownloading) {
+                if (isDownloading) {
+                    // 下载中：换成转圈并禁用按钮，避免重复点出第二次下载
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Outlined.Download,
+                        contentDescription = "下载"
+                    )
+                }
             }
 
             IconButton(onClick = { requestEdit(song) }) {

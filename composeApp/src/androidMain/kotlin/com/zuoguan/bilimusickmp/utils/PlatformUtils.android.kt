@@ -56,5 +56,9 @@ internal actual fun writeTextFileAtomic(path: String, content: String) {
 
 internal actual fun currentTimeMillis(): Long = System.currentTimeMillis()
 
+/** ExoPlayer 的 FileDataSource 从 URI 的 path 取文件，因此这里补成 `file://`。 */
+internal actual fun localMediaLocation(path: String): String =
+    if (path.startsWith("file://")) path else "file://$path"
+
 /** Android 视为移动端界面。 */
 internal actual val isMobileUi: Boolean = true

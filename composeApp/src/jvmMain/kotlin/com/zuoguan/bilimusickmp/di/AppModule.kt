@@ -3,13 +3,17 @@ package com.zuoguan.bilimusickmp.di
 import com.zuoguan.bilimusickmp.services.AudioPlayService
 import com.zuoguan.bilimusickmp.services.BiliService
 import com.zuoguan.bilimusickmp.services.CloudSyncService
+import com.zuoguan.bilimusickmp.services.DesktopMusicLibraryWriter
 import com.zuoguan.bilimusickmp.services.ExtractSongBaseInfoService
 import com.zuoguan.bilimusickmp.services.JsEngineService
 import com.zuoguan.bilimusickmp.services.JsonPreferencesStorageService
 import com.zuoguan.bilimusickmp.services.KuGouService
+import com.zuoguan.bilimusickmp.services.MusicLibraryWriter
 import com.zuoguan.bilimusickmp.services.NetEaseService
 import com.zuoguan.bilimusickmp.services.PreferencesStorageService
 import com.zuoguan.bilimusickmp.services.QQMusicService
+import com.zuoguan.bilimusickmp.services.SongCacheService
+import com.zuoguan.bilimusickmp.services.SongDownloadService
 import com.zuoguan.bilimusickmp.services.SongMetadataService
 import com.zuoguan.bilimusickmp.services.SongRepositoryService
 import com.zuoguan.bilimusickmp.services.UpdateCheckService
@@ -47,19 +51,31 @@ val appModule = module {
     single { ExtractSongBaseInfoService(get()) }
     single<AudioPlayService> { VlcAudioPlayService() }
     single { SongRepositoryService() }
+
+    // 桌面端没有「Wi-Fi / 移动网络」之分，一律视为不受限，让缓存开关只管开关本身
+    single {
+        SongCacheService(
+            preferences = get(),
+            cacheDirectory = File(getAppConfigDir(), "song_cache").absolutePath,
+            isWifiConnected = { true }
+        )
+    }
+    single<MusicLibraryWriter> { DesktopMusicLibraryWriter() }
+    single { SongDownloadService(get()) }
+
     single { SongMetadataService(get(), get(), get(), get(), get()) }
     single { UpdateCheckService() }
     single(createdAtStart = true) { CloudSyncService(get(), get(), get()) }
     // 歌曲编辑会话：ViewModel 双平台共用，桌面侧由对话框承载
     single { SongEditorViewModel(get(), get()) }
 
-    single { SearchPageViewModel(get(), get(), get(), get(), get()) }
+    single { SearchPageViewModel(get(), get(), get(), get(), get(), get()) }
     single {
-        PlaylistPageViewModel(get(), get(), get(), get(), get(), get())
+        PlaylistPageViewModel(get(), get(), get(), get(), get(), get(), get(), get())
     }
     single { PlayBarViewModel(get()) }
     single { LyricsPageViewModel(get(), get()) }
-    single { SettingsPageViewModel(get(), get(), get(), get(), get()) }
+    single { SettingsPageViewModel(get(), get(), get(), get(), get(), get()) }
     // 主题色由根组件订阅，与设置页共用同一份偏好
     single { ThemeViewModel(get()) }
 }

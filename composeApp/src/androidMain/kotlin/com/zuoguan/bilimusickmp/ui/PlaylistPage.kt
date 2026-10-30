@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.rounded.DragHandle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -138,6 +139,35 @@ fun PlaylistPage(
                         headlineContent = { Text("编辑") },
                         leadingContent = { Icon(Icons.Default.Edit, null) },
                         modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                val isDownloading = song != null && song.id in state.downloadingIds
+
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    // 下载期间整行不可点，避免重复发起下载
+                    enabled = !isDownloading,
+                    onClick = {
+                        // 不在这里收起菜单：等这次下载结束由 ViewModel 关闭，
+                        // 用户才能看到图标变成 loading 的过程
+                        if (song != null) {
+                            viewModel.downloadSong(song)
+                        }
+                    }
+                ) {
+                    ListItem(
+                        headlineContent = { Text("下载") },
+                        leadingContent = {
+                            if (isDownloading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Icon(Icons.Outlined.Download, contentDescription = null)
+                            }
+                        }
                     )
                 }
 

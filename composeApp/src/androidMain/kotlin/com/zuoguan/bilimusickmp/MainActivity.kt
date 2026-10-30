@@ -88,6 +88,22 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        // 下载到系统音乐目录：Android 10 起走 MediaStore，无需权限；更老的系统要写公共目录。
+        // 和通知权限一样放在启动时申请，省得用户点了下载才发现没授权。
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            if (ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.WRITE_EXTERNAL_STORAGE
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                ActivityCompat.requestPermissions(
+                    this,
+                    arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE),
+                    101
+                )
+            }
+        }
+
         setContent {
             App()
         }

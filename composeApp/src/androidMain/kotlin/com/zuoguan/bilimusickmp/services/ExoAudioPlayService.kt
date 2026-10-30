@@ -9,13 +9,13 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import com.zuoguan.bilimusickmp.models.PlayMode
 import com.zuoguan.bilimusickmp.models.PlaybackState
 import com.zuoguan.bilimusickmp.models.TrackInfo
-import com.zuoguan.bilimusickmp.models.AudioSource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -28,7 +28,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
-import java.net.URL
 import java.util.concurrent.TimeUnit
 import androidx.core.net.toUri
 import com.zuoguan.bilimusickmp.models.PlaySource
@@ -42,7 +41,7 @@ import kotlin.time.Duration.Companion.milliseconds
  * StateFlow 暴露给 UI。
  */
 class ExoAudioPlayService(
-    context: Context,
+    private val context: Context,
     private val onError: (String) -> Unit = {}
 ): AudioPlayService {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -171,39 +170,22 @@ class ExoAudioPlayService(
     private suspend fun buildMediaSource(track: TrackInfo): MediaSource {
         val audioUrl = track.urlProvider()
 
-        val headers = mutableMapOf(
-            "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
-            "Accept" to "*/*",
-        )
-
-        when (track.audioSource) {
-            AudioSource.BILI_BILI -> {
-                headers["Referer"] = "https://www.bilibili.com/"
-                headers["Origin"] = "https://www.bilibili.com"
-            }
-            AudioSource.NET_EASE -> {
-                headers["Host"] = URL(audioUrl).host
-                headers["Referer"] = "https://music.163.com/"
-                headers["Origin"] = "https://music.163.com"
-            }
-            AudioSource.KU_GOU -> {
-                headers["User-Agent"] = "IPhone-8990-searchSong"
-                headers["UNI-UserAgent"] = "iOS11.4-Phone8990-1009-0-WiFi"
-            }
-            AudioSource.QQ_MUSIC -> {
-                // QQ 音乐的直链不校验请求头，带上站点 Referer 只是为了和网页端一致
-                headers["Referer"] = "https://y.qq.com/"
-                headers["Origin"] = "https://y.qq.com"
-            }
-        }
+        // 每首歌的请求头按音源现取：缓存命中时地址是本地文件，用不到这些头，
+        // 但 DefaultDataSource 只在 http(s) 时才会走 OkHttp，带着也无副作用。
+        val headers = AudioRequestHeaders.forSource(track.audioSource, audioUrl)
 
         // 每个媒体源都新建一个 Factory：Factory 上的 request properties 是可变共享状态，
         // 而且 OkHttpDataSource 在真正发起请求时才去读它。共用一个 Factory 会让后一次
         // setDefaultRequestProperties 把先前的请求头覆盖掉——歌单播放会预取下一首，于是
         // 当前曲目被套上"下一首"的请求头（Referer / Host / User-Agent），相邻两首来自不同
         // 音源时必然取不到流，表现为"某些歌在歌单里点不动，搜索页却能播"。
-        val factory = OkHttpDataSource.Factory(okHttpClient)
+        val httpFactory = OkHttpDataSource.Factory(okHttpClient)
             .setDefaultRequestProperties(headers)
+
+        // 缓存 / 下载过的歌曲地址是 file://，必须交给能读本地文件的 DataSource；
+        // 直接用 OkHttpDataSource 会因为 scheme 不是 http(s) 而报错。DefaultDataSource
+        // 对 file/asset/content 走本地读取，其余 scheme 仍回落到 OkHttp。
+        val factory = DefaultDataSource.Factory(context, httpFactory)
 
         val mediaMetadata = MediaMetadata.Builder()
             .setTitle(track.title)

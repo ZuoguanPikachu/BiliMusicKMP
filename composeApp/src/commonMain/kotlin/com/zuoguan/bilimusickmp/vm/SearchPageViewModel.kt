@@ -14,6 +14,7 @@ import com.zuoguan.bilimusickmp.services.BiliService
 import com.zuoguan.bilimusickmp.services.KuGouService
 import com.zuoguan.bilimusickmp.services.NetEaseService
 import com.zuoguan.bilimusickmp.services.QQMusicService
+import com.zuoguan.bilimusickmp.services.SongCacheService
 import com.zuoguan.bilimusickmp.utils.UiEvent
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -42,6 +43,7 @@ class SearchPageViewModel(
     private val audioPlayService: AudioPlayService,
     private val kuGouService: KuGouService,
     private val qqMusicService: QQMusicService,
+    private val songCacheService: SongCacheService,
 ) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -211,24 +213,14 @@ class SearchPageViewModel(
             playSource = PlaySource.SEARCH,
             pic = item.pic,
             urlProvider = {
-                when (item.audioSource) {
-                    AudioSource.BILI_BILI -> {
-                        val cid = biliService.getCid(item.id)
-                        biliService.getAudioUrl(item.id, cid)
-                    }
-
-                    AudioSource.NET_EASE -> {
-                        netEaseService.getAudioUrl(item.id)
-                    }
-
-                    AudioSource.KU_GOU -> {
-                        kuGouService.getAudioUrl(item.id)
-                    }
-
-                    AudioSource.QQ_MUSIC -> {
-                        qqMusicService.getAudioUrl(item.id)
-                    }
-                }
+                // 试听的那首歌如果之前下载过，直接播本地文件；没有则取远端直链。
+                // 这里不缓存：缓存是给歌单里的歌用的，试听结果缓存下来只会白占空间。
+                songCacheService.resolvePlaybackUrl(
+                    songId = item.id,
+                    audioSource = item.audioSource,
+                    autoCache = false,
+                    remoteUrl = { resolveRemoteAudioUrl(item) }
+                )
             },
             // 歌词身份要和下面的 lyricsProvider 对得上，否则只换歌词源时变更不会外发
             lyricSource = item.lyricSource,
@@ -269,6 +261,20 @@ class SearchPageViewModel(
                 )
             }
         }
+    }
+
+    /** 各音源的远端直链，仅在本地没有下载文件时才走这里。 */
+    private suspend fun resolveRemoteAudioUrl(item: SearchResult): String = when (item.audioSource) {
+        AudioSource.BILI_BILI -> {
+            val cid = biliService.getCid(item.id)
+            biliService.getAudioUrl(item.id, cid)
+        }
+
+        AudioSource.NET_EASE -> netEaseService.getAudioUrl(item.id)
+
+        AudioSource.KU_GOU -> kuGouService.getAudioUrl(item.id)
+
+        AudioSource.QQ_MUSIC -> qqMusicService.getAudioUrl(item.id)
     }
 
 }

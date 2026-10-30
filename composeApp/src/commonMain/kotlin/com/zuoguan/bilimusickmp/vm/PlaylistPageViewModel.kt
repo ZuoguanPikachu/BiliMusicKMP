@@ -13,6 +13,8 @@ import com.zuoguan.bilimusickmp.services.BiliService
 import com.zuoguan.bilimusickmp.services.KuGouService
 import com.zuoguan.bilimusickmp.services.NetEaseService
 import com.zuoguan.bilimusickmp.services.QQMusicService
+import com.zuoguan.bilimusickmp.services.SongCacheService
+import com.zuoguan.bilimusickmp.services.SongDownloadService
 import com.zuoguan.bilimusickmp.services.SongRepositoryService
 import com.zuoguan.bilimusickmp.utils.UiEvent
 import kotlinx.coroutines.CancellationException
@@ -41,7 +43,9 @@ class PlaylistPageViewModel(
     private val biliService: BiliService,
     private val netEaseService: NetEaseService,
     private val kuGouService: KuGouService,
-    private val qqMusicService: QQMusicService
+    private val qqMusicService: QQMusicService,
+    private val songCacheService: SongCacheService,
+    private val songDownloadService: SongDownloadService
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     /** 列表滚动状态；放在 VM 里是为了让滚动位置跨重组保留。 */
@@ -163,7 +167,19 @@ class PlaylistPageViewModel(
         lyricsProvider = { resolveLyrics() },
     )
 
-    private suspend fun Song.resolveAudioUrl(): String = when (audioSource) {
+    /**
+     * 播放地址：本地有下载 / 缓存就直接播本地文件，否则取远端直链，
+     * 并在缓存开关允许时顺带在后台缓存一份（不阻塞起播）。
+     */
+    private suspend fun Song.resolveAudioUrl(): String = songCacheService.resolvePlaybackUrl(
+        songId = id,
+        audioSource = audioSource,
+        autoCache = true,
+        remoteUrl = { resolveRemoteAudioUrl() }
+    )
+
+    /** 各音源的远端直链，仅在本地没有文件时才会被调用。 */
+    private suspend fun Song.resolveRemoteAudioUrl(): String = when (audioSource) {
         AudioSource.BILI_BILI -> biliService.getAudioUrl(id, cid)
         AudioSource.NET_EASE -> netEaseService.getAudioUrl(id)
         AudioSource.KU_GOU -> kuGouService.getAudioUrl(id)
@@ -202,6 +218,53 @@ class PlaylistPageViewModel(
         }
     }
 
+    /**
+     * 把某首歌下载到系统的「音乐」目录，文件名用「歌曲 - 歌手」。
+     *
+     * 与「播放时自动缓存」相互独立：即使缓存开关是关的，用户主动点下载也照做，
+     * 也不受「仅 Wi-Fi」限制。下载完成后文件归系统音乐库管理，应用不再跟踪它。
+     *
+     * 下载期间 [PlaylistUiState.downloadingIds] 里有这首歌，界面据此把按钮换成 loading
+     * 并挡住重复点击；结束后才收起底部菜单——手机端的下载入口在菜单里，立刻收起的话
+     * 用户看不到「正在下载」的反馈。
+     */
+    fun downloadSong(song: Song) {
+        if (song.id in _uiState.value.downloadingIds) return
+
+        _uiState.update { it.copy(downloadingIds = it.downloadingIds + song.id) }
+        scope.launch {
+            try {
+                val result = songDownloadService.download(
+                    title = song.title,
+                    author = song.author,
+                    audioSource = song.audioSource,
+                    remoteUrl = { song.resolveRemoteAudioUrl() }
+                )
+
+                _uiEvents.send(
+                    result.fold(
+                        onSuccess = { location ->
+                            UiEvent.ShowSnackBar("已保存到 $location")
+                        },
+                        onFailure = { error ->
+                            UiEvent.ShowSnackBar(
+                                message = "下载失败：${error.message ?: "未知错误"}",
+                                duration = SnackbarDuration.Long
+                            )
+                        }
+                    )
+                )
+            } finally {
+                _uiState.update {
+                    it.copy(
+                        downloadingIds = it.downloadingIds - song.id,
+                        showBottomSheet = false
+                    )
+                }
+            }
+        }
+    }
+
     fun switchOrderingMode() {
         _uiState.update {
             it.copy(isOrdering = !it.isOrdering)
@@ -232,6 +295,9 @@ class PlaylistPageViewModel(
 
         scope.launch {
             songRepository.removeSong(song.id)
+            // 歌单里没有这首歌了，它留在缓存里的副本也没有意义，顺手清掉免得白占空间
+            // （下载到音乐目录的文件属于用户，不动）
+            songCacheService.purge(song.id)
         }
 
         _uiState.update {
@@ -278,6 +344,13 @@ data class PlaylistUiState(
     val showBottomSheet: Boolean = false,
 
     val songToHandle: Song? = null,
+
+    /**
+     * 正在下载到音乐目录的歌曲 id。
+     *
+     * 只用于把下载按钮换成 loading、挡住重复点击；下载完就归系统音乐库，不再标记。
+     */
+    val downloadingIds: Set<String> = emptySet(),
 )
 
 /** 多标签过滤模式：[OR] 命中任一选中标签即可，[AND] 需命中全部选中标签。 */
